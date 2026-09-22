@@ -23,6 +23,11 @@ describe("normalizeToolResult", () => {
       { type: "file", uri: "file:///x.png", mime: "image/png", name: "x.png" },
     ])
   })
+
+  it("gives the explicit V1 title precedence over metadata.title", () => {
+    const out = normalizeToolResult({ output: "body", title: "T", metadata: { title: "M" } })
+    expect(out.metadata).toEqual({ title: "T" })
+  })
 })
 
 describe("toV2Tool", () => {
@@ -62,5 +67,63 @@ describe("toV2Tool", () => {
     expect(seenCtx?.directory).toBe("/work")
     expect(typeof seenCtx?.metadata).toBe("function")
     expect(seenCtx?.abort).toBeInstanceOf(AbortSignal)
+  })
+
+  it("fails closed when no ask resolver is supplied", async () => {
+    const v2 = toV2Tool(
+      "gated",
+      {
+        description: "d",
+        args: {},
+        execute: async (_args: unknown, ctx: { ask: (i: { permission: string; patterns: string[]; always: string[]; metadata: Record<string, unknown> }) => Promise<void> }) => {
+          await ctx.ask({ permission: "shell", patterns: [], always: [], metadata: {} })
+          return "approved"
+        },
+      },
+      { namespace: "omo", directory: "/work" },
+    )
+    await expect(
+      v2.execute({}, { sessionID: "s", agent: "a", messageID: "m", id: "c", progress: async () => {} } as never),
+    ).rejects.toThrow("ask() is not available in this host; refusing to auto-approve")
+  })
+
+  it("supplies a distinct abort signal per execute call", async () => {
+    const signals: AbortSignal[] = []
+    const v2 = toV2Tool(
+      "probe",
+      {
+        description: "d",
+        args: {},
+        execute: async (_args: unknown, ctx: { abort: AbortSignal }) => {
+          signals.push(ctx.abort)
+          return "ok"
+        },
+      },
+      { namespace: "omo", directory: "/work" },
+    )
+    const ctx = { sessionID: "s", agent: "a", messageID: "m", id: "c", progress: async () => {} } as never
+    await v2.execute({}, ctx)
+    await v2.execute({}, ctx)
+    expect(signals).toHaveLength(2)
+    expect(signals[0]).not.toBe(signals[1])
+  })
+
+  it("forwards ask to opts.ask when supplied", async () => {
+    const seen: Array<{ permission: string }> = []
+    const v2 = toV2Tool(
+      "gated",
+      {
+        description: "d",
+        args: {},
+        execute: async (_args: unknown, ctx: { ask: (i: { permission: string; patterns: string[]; always: string[]; metadata: Record<string, unknown> }) => Promise<void> }) => {
+          await ctx.ask({ permission: "shell", patterns: ["*"], always: [], metadata: {} })
+          return "done"
+        },
+      },
+      { namespace: "omo", directory: "/work", ask: async (i) => { seen.push(i) } },
+    )
+    const res = await v2.execute({}, { sessionID: "s", agent: "a", messageID: "m", id: "c", progress: async () => {} } as never)
+    expect(res).toEqual({ content: "done" })
+    expect(seen).toEqual([{ permission: "shell", patterns: ["*"], always: [], metadata: {} }])
   })
 })
