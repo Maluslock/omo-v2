@@ -39,4 +39,31 @@ describe("toV2AgentInfo", () => {
     expect(out.mode).toBe("primary")
     expect(out.request).toEqual({ body: { temperature: 0.2, top_p: 0.9 } })
   })
+
+  it("prefers the V1 permission map and preserves ask", () => {
+    const out = toV2AgentInfo("p", { permission: { bash: "deny", read: "allow", edit: "ask" } })
+    expect(out.permissions).toEqual([
+      { action: "shell", resource: "*", effect: "deny" },
+      { action: "read", resource: "*", effect: "allow" },
+      { action: "edit", resource: "*", effect: "ask" },
+    ])
+  })
+
+  it("maps apply_patch to edit", () => {
+    const out = toV2AgentInfo("a", { permission: { apply_patch: "allow" } })
+    expect(out.permissions).toEqual([{ action: "edit", resource: "*", effect: "allow" }])
+  })
+
+  it("honors an independent V1 variant field", () => {
+    const out = toV2AgentInfo("v", { model: "anthropic/claude-x", variant: "max" })
+    expect(out.model).toEqual({ providerID: "anthropic", id: "claude-x", variant: "max" })
+  })
+
+  it("falls back to the legacy tools map when permission is absent", () => {
+    const out = toV2AgentInfo("t", { tools: { bash: false, read: true } })
+    expect(out.permissions).toEqual([
+      { action: "shell", resource: "*", effect: "deny" },
+      { action: "read", resource: "*", effect: "allow" },
+    ])
+  })
 })
