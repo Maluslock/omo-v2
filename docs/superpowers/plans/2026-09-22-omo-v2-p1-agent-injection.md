@@ -388,3 +388,56 @@ git commit -m "docs(p1): record V2 agent registration verification"
 **3. 类型一致性**：`toV2AgentInfo(id, v1)` 返回 `Record<string, unknown>`，Task 2 用 `Object.assign(agent, mapped)` 写入 `DeepMutable<Agent.Info>`；`Model.Ref.parse` 来自 `@opencode/plugin` 的 `Model` 再导出（已在 `dist/promise/index.d.ts` 确认）。
 
 **已知残余风险（Task 2 需实测）**：① `applyAgentConfig` 对 `ctx.client` 的依赖；② `permissions: deny` 是否真拦截；③ 注入 agent 在 `ctx.agent.reload()` 后是否存活（若否，P1 需重注册策略）。
+
+---
+
+## Fix round 1 — 裁决修正（Task 1 映射）
+
+评审证实计划本身有误，修正如下（权威来源：`applyAgentConfig` 的产物经 `migrateAgentConfig` 后**用 `permission` 而非 `tools`**；`variant` 是独立字段）：
+
+```ts
+const TOOL_ACTION: Record<string, string> = {
+  bash: "shell",
+  write: "edit",
+  edit: "edit",
+  patch: "edit",
+  apply_patch: "edit",
+}
+
+// authoritative: V1 permission map Record<string, "allow"|"deny"|"ask">
+// fallback:     legacy boolean tools map
+function toPermissions(permission: unknown, tools: unknown) {
+  if (typeof permission === "object" && permission !== null) {
+    const entries = Object.entries(permission as Record<string, string>)
+    if (entries.length > 0) {
+      return entries.map(([name, effect]) => ({
+        action: TOOL_ACTION[name] ?? name,
+        resource: "*",
+        effect,
+      }))
+    }
+  }
+  if (typeof tools === "object" && tools !== null) {
+    const entries = Object.entries(tools as Record<string, boolean>)
+    if (entries.length > 0) {
+      return entries.map(([name, enabled]) => ({
+        action: TOOL_ACTION[name] ?? name,
+        resource: "*",
+        effect: enabled ? "allow" : "deny",
+      }))
+    }
+  }
+  return undefined
+}
+
+// model：model 字符串里的 #variant 与独立 v1.variant 都要考虑
+if (typeof v1.model === "string") {
+  const parsed = Model.Ref.parse(v1.model)
+  const variant = parsed.variant ?? (typeof v1.variant === "string" ? v1.variant : undefined)
+  out.model = variant === undefined
+    ? { providerID: parsed.providerID, id: parsed.id }
+    : { providerID: parsed.providerID, id: parsed.id, variant }
+}
+```
+
+新增测试：`permission` 含 `ask`、独立 `variant`、`apply_patch→edit`。
