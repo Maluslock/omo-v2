@@ -35,6 +35,7 @@
     "@oh-my-opencode/utils": "workspace:*",
     "@opencode-ai/plugin": "1.15.13",
     "@opencode-ai/sdk": "1.15.13",
+    "@opencode/plugin": "^2.0.11",
     "commander": "^14.0.3",
     "js-yaml": "^4.1.1",
     "jsonc-parser": "^3.3.1",

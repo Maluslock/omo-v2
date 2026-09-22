@@ -161,6 +161,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/plugin": "1.15.13",
     "@opencode-ai/sdk": "1.15.13",
+    "@opencode/plugin": "^2.0.11",
     "@opentui/core": "^0.2.16",
     "@opentui/keymap": "^0.2.16",
     "@opentui/solid": "^0.2.16",
