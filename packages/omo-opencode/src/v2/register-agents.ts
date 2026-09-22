@@ -76,10 +76,25 @@ export async function registerOmoAgents(
   await ctx.agent.transform((editor) => {
     for (const [id, mapped] of mappedAgents) {
       editor.update(id, (agent) => {
-        const { permissions: incoming, ...rest } = mapped
+        const { permissions: incoming, request: incomingRequest, ...rest } = mapped
         Object.assign(agent, rest)
-        const merged = mergeAgentPermissions(agent.permissions, incoming as never)
-        if (merged !== undefined) agent.permissions = merged as never
+
+        const mergedPermissions = mergeAgentPermissions(agent.permissions as never, incoming as never)
+        if (mergedPermissions !== undefined) agent.permissions = mergedPermissions as never
+
+        if (incomingRequest !== undefined) {
+          const prev = (agent.request ?? {}) as {
+            settings?: Record<string, unknown>
+            headers?: Record<string, unknown>
+            body?: Record<string, unknown>
+          }
+          const next = (incomingRequest ?? {}) as typeof prev
+          agent.request = {
+            settings: { ...(prev.settings ?? {}), ...(next.settings ?? {}) },
+            headers: { ...(prev.headers ?? {}), ...(next.headers ?? {}) },
+            body: { ...(prev.body ?? {}), ...(next.body ?? {}) },
+          } as never
+        }
       })
     }
     if (defaultAgent !== undefined) editor.default(defaultAgent)

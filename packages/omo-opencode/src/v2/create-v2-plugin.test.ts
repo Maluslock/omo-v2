@@ -4,7 +4,16 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createV2Plugin } from "./create-v2-plugin"
 
-type MutableAgent = { id: string; name?: string; permissions: Array<{ action: string; resource: string; effect: string }> }
+type MutableAgent = {
+  id: string
+  name?: string
+  permissions: Array<{ action: string; resource: string; effect: string }>
+  request?: {
+    settings?: Record<string, unknown>
+    headers?: Record<string, unknown>
+    body?: Record<string, unknown>
+  }
+}
 
 function createMockEditor() {
   const registry = new Map<string, MutableAgent>()
@@ -16,8 +25,10 @@ function createMockEditor() {
     update: (id: string, fn: (agent: MutableAgent) => void) => {
       const agent = registry.get(id) ?? {
         id,
-        // Emulate the seed `Agent.Info.default(id)` rules the V2 editor prepends.
+        // Emulate the seed `Agent.Info.default(id)` the V2 editor prepends: a wildcard
+        // permission rule, and a `request` with all three keys (`settings`/`headers`/`body`).
         permissions: [{ action: "*", resource: "*", effect: "allow" }],
+        request: { settings: { seeded: true }, headers: {}, body: {} },
       }
       if (!registry.has(id)) registry.set(id, agent)
       fn(agent)
@@ -69,6 +80,22 @@ describe("createV2Plugin", () => {
     expect(agentsWithIncoming.length).toBeGreaterThan(0)
     for (const agent of agentsWithIncoming) {
       expect(agent.permissions.some((p) => p.action === "*" && p.effect === "allow")).toBe(true)
+    }
+
+    // The `request` is merged, not replaced: the V2 list endpoint requires
+    // `request.settings` and `request.headers`, so they must survive for every agent.
+    for (const agent of editor.registry.values()) {
+      expect(agent.request?.settings).toBeDefined()
+      expect(agent.request?.headers).toBeDefined()
+    }
+    const agentsWithRequestBody = [...editor.registry.values()].filter(
+      (agent) => Object.keys(agent.request?.body ?? {}).length > 0,
+    )
+    // Prove the merge path actually ran (at least one agent received a mapped request body).
+    expect(agentsWithRequestBody.length).toBeGreaterThan(0)
+    for (const agent of agentsWithRequestBody) {
+      expect(agent.request?.settings).toEqual({ seeded: true })
+      expect(agent.request?.headers).toEqual({})
     }
   })
 })
