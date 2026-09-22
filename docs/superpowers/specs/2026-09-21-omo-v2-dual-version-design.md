@@ -172,7 +172,7 @@ OpenCode V2 启动
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| **P0 骨架** ✅ | 双版本入口 + `createV2Plugin`（id + 空 setup） | 已达成（V2）：隔离 V2 下 `GET /api/plugin` 列出 `id:"oh-my-openagent" state:"active"`，失败串 0/0（证据见 `/tmp/omo-v2-verify/`）。V1 兼容**仅做 import/静态验证**：默认导出仍带可调用的 `server`；**未做 V1 实机加载**（V1 未安装）。 |
+| **P0 骨架** ✅ | 双版本入口 + `createV2Plugin`（id + 空 setup） | 已达成（V2）：隔离 V2 下 `GET /api/plugin` 列出 `id:"oh-my-openagent" state:"active"`，失败串 0/0（证据见 `/tmp/omo-v2-verify/`）。V1 兼容**仅做 import/静态验证**：默认导出仍带可调用的 `server`；**未做 V1 实机加载**（现存 V1 1.18.4 环境与当前 V2-schema 配置不兼容，实机回归受阻）。 |
 | P1 Agent | agent / 模型 / variant / categories 注入 | V2 能选到 Sisyphus/oracle 等 agent |
 | P2 工具 | 38+ 工具迁到 `ctx.tool.transform`（先核心几个） | 工具可调用 |
 | P3 事件/生命周期 | `session.*` 事件、retry、compaction | 事件驱动行为生效 |
