@@ -19,8 +19,11 @@ type PermissionRule = { action: string; resource: string; effect: string }
  * The V2 editor seeds `Agent.Info.default(id)` permissions (wildcard allow,
  * `external_directory` ask, `.env` guards) when a missing id is created. Replacing that
  * ruleset with the V1-derived rules would silently drop those guards, so incoming rules
- * are appended and de-duplicated by `(action, resource)` instead. Mirrors the built-in
- * `opencode.config.agent` plugin, which pushes, per the spike findings.
+ * are appended and de-duplicated by the exact `(action, resource, effect)` triple. The
+ * effect is part of the key on purpose: a `deny` must coexist with a seeded wildcard
+ * `allow` (later rule wins in V2), and collapsing on `(action, resource)` would silently
+ * discard the deny. Mirrors the built-in `opencode.config.agent` plugin, which pushes,
+ * per the spike findings.
  */
 export function mergeAgentPermissions(
   existing: readonly PermissionRule[] | undefined,
@@ -30,12 +33,13 @@ export function mergeAgentPermissions(
   const add = incoming ?? []
   if (add.length === 0) return existing === undefined ? undefined : [...base]
   if (base.length === 0) return [...add]
-  const seen = new Set(base.map((p) => `${p.action}\u0000${p.resource}`))
+  const key = (p: PermissionRule) => `${p.action}\u0000${p.resource}\u0000${p.effect}`
+  const seen = new Set(base.map(key))
   const merged = [...base]
   for (const p of add) {
-    const key = `${p.action}\u0000${p.resource}`
-    if (seen.has(key)) continue
-    seen.add(key)
+    const k = key(p)
+    if (seen.has(k)) continue
+    seen.add(k)
     merged.push(p)
   }
   return merged
@@ -70,7 +74,7 @@ export async function registerOmoAgents(
   const mappedAgents = new Map<string, Record<string, unknown>>()
   for (const [id, v1] of Object.entries(agentResult)) {
     if (typeof v1 !== "object" || v1 === null) continue
-    mappedAgents.set(id, toV2AgentInfo(id, v1 as Record<string, unknown>))
+    mappedAgents.set(id, toV2AgentInfo(id, v1 as Record<string, unknown>, pluginConfig))
   }
 
   await ctx.agent.transform((editor) => {

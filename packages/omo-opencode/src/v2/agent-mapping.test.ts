@@ -66,4 +66,42 @@ describe("toV2AgentInfo", () => {
       { action: "read", resource: "*", effect: "allow" },
     ])
   })
+
+  it("flattens a resource-scoped permission map into one rule per pattern", () => {
+    const out = toV2AgentInfo("n", {
+      permission: { bash: { "rm -rf *": "ask", "git push *": "deny" } },
+    })
+    expect(out.permissions).toEqual([
+      { action: "shell", resource: "rm -rf *", effect: "ask" },
+      { action: "shell", resource: "git push *", effect: "deny" },
+    ])
+  })
+
+  it("skips permission entries whose effect is not a valid V2 effect", () => {
+    const out = toV2AgentInfo("bad", {
+      permission: { bash: "bogus", read: "allow", webfetch: 42 },
+    })
+    expect(out.permissions).toEqual([{ action: "read", resource: "*", effect: "allow" }])
+  })
+
+  it("lowers a configured reasoning level into model.variant", () => {
+    const out = toV2AgentInfo("r", { model: "litellm/deepseek-flash", reasoning: "max" })
+    expect(out.model).toEqual({ providerID: "litellm", id: "deepseek-flash", variant: "max" })
+  })
+
+  it("resolves a config-only reasoning override against the model", () => {
+    // The registry uses display names as ids; the config lookup has to map back to the
+    // lowercase config key ("Sisyphus - ultraworker" -> "sisyphus").
+    const out = toV2AgentInfo(
+      "Sisyphus - ultraworker",
+      { model: "litellm/deepseek-flash" },
+      { agents: { sisyphus: { reasoning: "max" } } } as never,
+    )
+    expect(out.model).toEqual({ providerID: "litellm", id: "deepseek-flash", variant: "max" })
+  })
+
+  it("does not invent a variant when the model has no matching variant", () => {
+    const out = toV2AgentInfo("nomatch", { model: "new-api/kimi-k2.7-code", reasoning: "max" })
+    expect(out.model).toEqual({ providerID: "new-api", id: "kimi-k2.7-code" })
+  })
 })

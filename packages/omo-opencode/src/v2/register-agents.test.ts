@@ -22,6 +22,17 @@ describe("mergeAgentPermissions", () => {
     ])
   })
 
+  it("keeps rules that share (action, resource) but differ in effect", () => {
+    const existing = [rule("*", "allow")]
+    const incoming = [rule("*", "deny"), rule("read", "allow")]
+
+    const out = mergeAgentPermissions(existing, incoming)
+
+    expect(out).toEqual([rule("*", "allow"), rule("*", "deny"), rule("read", "allow")])
+    expect(out?.some((p) => p.action === "*" && p.resource === "*" && p.effect === "deny")).toBe(true)
+    expect(out?.some((p) => p.action === "*" && p.resource === "*" && p.effect === "allow")).toBe(true)
+  })
+
   it("returns a copy of existing when incoming is undefined", () => {
     const existing = [rule("read", "allow")]
 
