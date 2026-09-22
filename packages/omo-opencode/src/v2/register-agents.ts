@@ -11,6 +11,36 @@ import { toV2AgentInfo } from "./agent-mapping"
 
 type V2Ctx = Parameters<NonNullable<Parameters<typeof Plugin.define>[0]["setup"]>>[0]
 
+type PermissionRule = { action: string; resource: string; effect: string }
+
+/**
+ * Merge an incoming permission ruleset onto the rules already present on the agent.
+ *
+ * The V2 editor seeds `Agent.Info.default(id)` permissions (wildcard allow,
+ * `external_directory` ask, `.env` guards) when a missing id is created. Replacing that
+ * ruleset with the V1-derived rules would silently drop those guards, so incoming rules
+ * are appended and de-duplicated by `(action, resource)` instead. Mirrors the built-in
+ * `opencode.config.agent` plugin, which pushes, per the spike findings.
+ */
+export function mergeAgentPermissions(
+  existing: readonly PermissionRule[] | undefined,
+  incoming: readonly PermissionRule[] | undefined,
+): PermissionRule[] | undefined {
+  const base = existing ?? []
+  const add = incoming ?? []
+  if (add.length === 0) return existing === undefined ? undefined : [...base]
+  if (base.length === 0) return [...add]
+  const seen = new Set(base.map((p) => `${p.action}\u0000${p.resource}`))
+  const merged = [...base]
+  for (const p of add) {
+    const key = `${p.action}\u0000${p.resource}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(p)
+  }
+  return merged
+}
+
 /**
  * Assemble omo's V1-shaped agent config and project it into the V2 agent registry.
  *
@@ -46,7 +76,10 @@ export async function registerOmoAgents(
   await ctx.agent.transform((editor) => {
     for (const [id, mapped] of mappedAgents) {
       editor.update(id, (agent) => {
-        Object.assign(agent, mapped)
+        const { permissions: incoming, ...rest } = mapped
+        Object.assign(agent, rest)
+        const merged = mergeAgentPermissions(agent.permissions, incoming as never)
+        if (merged !== undefined) agent.permissions = merged as never
       })
     }
     if (defaultAgent !== undefined) editor.default(defaultAgent)
