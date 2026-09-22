@@ -1,7 +1,7 @@
 # oh-my-openagent V2 双版本 Fork — 设计文档
 
 - 日期：2026-09-21
-- 状态：已批准（待用户复核本文件）
+- 状态：P0 完成（2026-09-22；fork 工作区 `/home/user/omo-v2`，分支提交至 `95004b8`）
 - 主题：让 oh-my-openagent(omo) 在 OpenCode V2 上可用，同时不破坏 V1
 
 ---
@@ -172,7 +172,7 @@ OpenCode V2 启动
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| **P0 骨架** | 双版本入口 + `createV2Plugin`（id + 空 setup） | V2 `plugin list` 出现 `oh-my-openagent`；V1 仍可加载 |
+| **P0 骨架** ✅ | 双版本入口 + `createV2Plugin`（id + 空 setup） | 已达成：隔离 V2 下 `GET /api/plugin` 列出 `id:"oh-my-openagent" state:"active"`，失败串 0/0（证据见 `/tmp/omo-v2-verify/`） |
 | P1 Agent | agent / 模型 / variant / categories 注入 | V2 能选到 Sisyphus/oracle 等 agent |
 | P2 工具 | 38+ 工具迁到 `ctx.tool.transform`（先核心几个） | 工具可调用 |
 | P3 事件/生命周期 | `session.*` 事件、retry、compaction | 事件驱动行为生效 |
