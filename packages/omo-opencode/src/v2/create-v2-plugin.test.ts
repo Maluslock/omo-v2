@@ -7,4 +7,9 @@ describe("createV2Plugin", () => {
     expect(plugin.id).toBe("oh-my-openagent")
     expect(typeof plugin.setup).toBe("function")
   })
+
+  it("setup() is an async no-op", async () => {
+    const plugin = createV2Plugin()
+    await expect(Promise.resolve(plugin.setup({} as never))).resolves.toBeUndefined()
+  })
 })

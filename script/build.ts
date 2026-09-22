@@ -57,7 +57,7 @@ const nodes: BuildNode[] = [
 	{ id: "lsp-daemon", command: "bun", args: ["run", "build:lsp-daemon"], deps: [] },
 	{ id: "codex-plugin", command: "bun", args: ["run", "build:codex-plugin"], deps: ["git-bash-mcp", "lsp-tools-mcp", "lsp-daemon"] },
 	{ id: "senpi-plugin", command: "bun", args: ["run", "build:senpi-plugin:stage"], deps: ["lsp-daemon"] },
-	{ id: "index", command: "bun", args: ["build", "packages/omo-opencode/src/index.ts", "--outdir", "dist", "--target", "bun", "--format", "esm", "--external", "zod"], deps: [] },
+	{ id: "index", command: "bun", args: ["build", "packages/omo-opencode/src/index.ts", "--outdir", "dist", "--target", "bun", "--format", "esm", "--external", "zod", "--external", "@opencode/plugin"], deps: [] },
 	{ id: "tui", command: "bun", args: ["build", "packages/omo-opencode/src/tui.ts", "--outdir", "dist", "--target", "bun", "--format", "esm", ...OPENTUI_EXTERNALS.flatMap((name) => ["--external", name])], deps: [] },
 	{ id: "shared-skills-assets", command: "bun", args: ["run", "build:shared-skills-assets"], deps: ["index"] },
 	{ id: "node-require-shim", command: "bun", args: ["run", "build:node-require-shim"], deps: ["index"] },
