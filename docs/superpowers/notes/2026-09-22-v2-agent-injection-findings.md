@@ -416,3 +416,164 @@ reload.
 - `b.log`, `b-agent.json` — mechanism B (config `agents`)
 - `c.log`, `c-agent.json` — mechanism C (markdown files)
 - `run.sh`, `probe.sh` — launch/read harness used above
+
+---
+
+## 8. P1 验证结果（Task 3：V2 实机验证 + 回归）
+
+- **HEAD**: `19d1cac` (P1: `toV2AgentInfo` + `registerOmoAgents` wired into `setup(ctx)`).
+- **结论**：omo agents **确实注册进了 V2 注册表**（`AgentEditor.list()` 可见 10 个 omo agent，单个 agent 的
+  `GET /api/agent/:id` 对形态正确的 agent 返回 HTTP 200）；**但 `GET /api/agent`（列表）返回 HTTP 400**
+  `InvalidRequestError: Missing key at ["data"][3]["request"]["settings"]`。根因是 `toV2AgentInfo` 用
+  `request: { body }` **整体替换** 了 V2 默认的 `request`（缺少必需的 `settings`/`headers`）。因此 P1 的
+  验收证据端点不可用，属真实阻塞项（非环境问题）。详见 §8.5。
+
+### 8.1 构建 index bundle
+
+```bash
+cd /home/user/omo-v2 && export PATH="$HOME/.bun/bin:$PATH"
+bun build packages/omo-opencode/src/index.ts --outdir dist --target bun --format esm \
+  --external zod --external @opencode/plugin
+# -> Bundled 1980 modules in 217ms ; dist/index.js 5.75 MB
+```
+
+### 8.2 隔离 scratch 启动命令
+
+```bash
+cd /tmp/omo-v2-agent-probe
+cat > opencode.json <<'JSON'
+{ "$schema": "https://opencode.ai/config.json" }
+JSON
+cat > .opencode/plugins/omo-local.ts <<'TS'
+export { default } from "/home/user/omo-v2/dist/index.js"
+TS
+OPENCODE_SERVER_PASSWORD=probepw XDG_CONFIG_HOME=/tmp/omo-v2-agent-probe/xdg \
+  opencode serve --hostname 127.0.0.1 --port 14310 --print-logs > /tmp/omo-v2-agent-probe/p1.log 2>&1 &
+# readiness: GET /api/info -u opencode:probepw -> 200 (2s)
+# read:      GET /api/agent   -u opencode:probepw
+```
+
+`opencode --version` = **2.0.11**；`@opencode/plugin` = **2.0.11**；Bun **1.3.14**；
+用户全局 config 未触碰（仅 `XDG_CONFIG_HOME=/tmp/omo-v2-agent-probe/xdg`）。
+插件加载日志确认生效：`msg="loading plugin" id=.../omo-local.ts`（`p1.log:15`）。
+
+### 8.3 Agent 列表与 omo agent（raw：`AgentEditor.list()` dump）
+
+`GET /api/agent` 列表因 §8.5 的 schema 错误返回 400，无法直接作为列表证据。改用一个
+只读探针插件（`zz-dump.ts`）在 omo 的 transform 之后调用 `editor.list()`，把注册表原样落盘
+（`/tmp/omo-v2-agent-probe/transform-dump.json`）。
+
+**总数 = 16**；builtin = 7（`build, general, explore, compaction, title, summary, plan`）；
+**omo = 10**（9 个新增 + 覆盖 builtin `explore`）：
+
+```text
+Sisyphus - ultraworker      mode=primary  model=litellm/deepseek-flash
+Prometheus - Plan Builder   mode=primary  model=litellm/deepseek-flash
+Atlas - Plan Executor       mode=primary  model=new-api/kimi-k2.6
+librarian                   mode=subagent model=litellm/deepseek-flash
+Metis - Plan Consultant     mode=subagent model=litellm/deepseek-flash
+Momus - Plan Critic         mode=subagent model=litellm/deepseek-flash
+multimodal-looker           mode=subagent model=new-api/kimi-k2.7-code
+oracle                      mode=subagent model=new-api/kimi-k2.7-code
+Sisyphus-Junior             mode=subagent model=litellm/deepseek-flash
+explore (覆盖 builtin)       mode=subagent model=litellm/deepseek-flash
+```
+
+说明：brief 列出的 `hephaestus` 未出现；`atlas`/`prometheus` 的 V1 显示名分别为
+`Atlas - Plan Executor` / `Prometheus - Plan Builder`。`explore` 命中了 V2 builtin 同名 id，
+被 omo 的 explore 覆盖（permissionCount=31）。
+
+### 8.4 oracle 条目（raw slice）
+
+`GET /api/agent/oracle` 返回 400（见 §8.5）。注册表内 oracle 的实际形态：
+
+```json
+{
+  "id": "oracle",
+  "name": "oracle",
+  "mode": "subagent",
+  "hidden": false,
+  "requestKeys": ["body"],
+  "hasSettings": false,
+  "hasHeaders": false,
+  "model": { "providerID": "new-api", "id": "kimi-k2.7-code" },
+  "permissionCount": 11,
+  "description": "Read-only consultation agent. High-IQ reasoning sp..."
+}
+```
+
+（观察：oracle 未带 `variant`；`model` 为 `new-api/kimi-k2.7-code`。）
+
+对照组：`GET /api/agent/Sisyphus%20-%20ultraworker` → **HTTP 200**，证明形态正确的 omo agent
+可通过 HTTP 端点读到（`request:{settings:{},headers:{},body:{}}`，model `litellm/deepseek-flash`）：
+
+```json
+{"location":{"directory":"/tmp/omo-v2-agent-probe"},
+ "data":{"id":"Sisyphus - ultraworker","name":"Sisyphus - ultraworker",
+         "model":{"id":"deepseek-flash","providerID":"litellm"},
+         "request":{"settings":{},"headers":{},"body":{}},
+         "system":"<agent-identity>...You are \"Sisyphus\"...OhMyOpenCode...","...": "..."}}
+```
+
+### 8.5 根因：`request` 被整体替换（真实缺陷）
+
+`GET /api/agent` 原始输出（`p1-agent.json`）与单 agent oracle（`p1d-oracle.txt`）：
+
+```json
+{"_tag":"InvalidRequestError","message":"Missing key\n  at [\"data\"][3][\"request\"][\"settings\"]","kind":"Body"}
+{"_tag":"InvalidRequestError","message":"Missing key\n  at [\"data\"][\"request\"][\"settings\"]","kind":"Body"}
+```
+
+`p1.log` 佐证：`level=WARN message="schema rejection" kind=Body reason="Missing key ... [\"data\"][3][\"request\"][\"settings\"]"`。
+
+`Agent.Info` schema 要求 `request: { settings, headers, body }` 三个键（见 §1.2）。`agent-mapping.ts:54-57`
+
+```ts
+const body: Record<string, unknown> = {}
+if (typeof v1.temperature === "number") body.temperature = v1.temperature
+if (typeof v1.top_p === "number") body.top_p = v1.top_p
+if (Object.keys(body).length > 0) out.request = { body }   // <-- 缺 settings/headers
+```
+
+`register-agents.ts:80` 用 `Object.assign(agent, rest)` 整体覆盖了 editor 预置的合法
+`request`（`Agent.Info.default` 的 `{settings:{},headers:{},body:{}}`）。对照 §1.4：built-in
+`opencode.config.agent` 的写法是 **merge** — `Object.assign(Q.request.headers, ...)` +
+`Object.assign(Q.request.body, ...)`，从不替换 `request` 对象。修复方向即：不要写 `out.request`，
+或在注入时只 merge `body`（保留 seeded `settings`/`headers`）。
+
+受影响的 8 个 agent（`hasSettings=false`）：`explore, Atlas - Plan Executor, librarian,
+Metis - Plan Consultant, Momus - Plan Critic, multimodal-looker, oracle, Sisyphus-Junior`。
+`Sisyphus - ultraworker`、`Prometheus - Plan Builder` 因无 temperature/top_p 而未触发（request 保持默认完整）。
+
+### 8.6 失败串计数（`p1.log`）
+
+```text
+grep -c "failed to load plugin" p1.log               -> 0
+grep -c "must export a default definition" p1.log    -> 0
+```
+
+插件本身加载无失败（唯一的 WARN 是上面的 response schema rejection，属上述缺陷，不是加载失败）。
+
+### 8.7 回归
+
+```text
+bun test packages/omo-opencode/src/v2/ packages/omo-opencode/src/index.export-shape.test.ts
+  -> 19 pass, 0 fail, 47 expect() calls, 4 files (1282ms)
+
+npx tsgo --noEmit -p packages/omo-opencode/tsconfig.json
+  -> exit=0 (无输出)
+```
+
+单测全绿——`agent-mapping.test.ts:40` 恰好把 `request: { body }` 断言为期望值，因此测试
+无法暴露该集成缺陷（测试与真实 V2 schema 的契约不一致）。
+
+### 8.8 证据文件（scratch，`/tmp/omo-v2-agent-probe/`）
+
+- `p1.log` — 本任务启动日志（插件加载 + schema rejection）
+- `p1-agent.json` / `p1d-agent-call2.txt` — `GET /api/agent` 的 400 原始输出
+- `p1d-agent-call1.txt` — 首次调用冷启动空列表 `{"location":...,"data":[]}`（HTTP 200）
+- `p1d-sisyphus.txt` — `GET /api/agent/Sisyphus - ultraworker` HTTP 200
+- `p1d-oracle.txt` — `GET /api/agent/oracle` HTTP 400
+- `transform-dump.json` — `AgentEditor.list()` 注册表快照（16 agents，10 omo）
+- `baseline-agent.json` / `baseline.log` — 无插件基线（HTTP 200，7 builtin）
+- `task3-run.sh`, `task3-dump.sh`, `task3-single2.sh` — 启动/取证脚本
