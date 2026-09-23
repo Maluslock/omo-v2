@@ -1,5 +1,5 @@
 // packages/omo-opencode/src/v2/register-hooks.ts
-import { log } from "../shared"
+import { isRecord, log } from "../shared"
 import {
   applyV1ToolAfter,
   applyV1ToolBefore,
@@ -16,6 +16,12 @@ import {
   type V1SystemInput,
   type V1SystemOutput,
 } from "./system-hook-mapping"
+import {
+  createRequestMessageOrigins,
+  fromV1RequestMessages,
+  toV1RequestMessages,
+  type V1RequestMessage,
+} from "./request-message-mapping"
 
 /**
  * V2 hook registration layer.
@@ -109,8 +115,7 @@ export type V1SystemTransformHandler = (
 
 /**
  * Register V1 `experimental.chat.system.transform` on the V2 `context` hook. Only the `system`
- * field is bridged here; request `messages` need their own converter (Task 4c) because
- * `toolPairValidator` inserts synthetic tool-result parts and is shape-sensitive.
+ * field is bridged here; request `messages` go through `registerOmoMessagesHook`.
  */
 export async function registerOmoSystemHook(
   registrar: V2SessionHookRegistrar,
@@ -121,5 +126,28 @@ export async function registerOmoSystemHook(
     if (pair === undefined) return
     await handler(pair.input, pair.output)
     applyV1System(event, pair.output)
+  })
+}
+
+export type V1MessagesTransformHandler = (
+  input: Record<string, never>,
+  output: { messages: V1RequestMessage[] },
+) => Promise<void> | void
+
+/**
+ * Register V1 `experimental.chat.messages.transform` on the V2 `context` hook. The V1 hooks
+ * mutate `output.messages` in place (and may push/splice parts), so the bridge records origins
+ * per invocation and rebuilds the V2 message list from the mutated view.
+ */
+export async function registerOmoMessagesHook(
+  registrar: V2SessionHookRegistrar,
+  handler: V1MessagesTransformHandler,
+): Promise<HookRegistration> {
+  return registrar("context", async (event) => {
+    if (!isRecord(event) || typeof event.sessionID !== "string") return
+    const origins = createRequestMessageOrigins()
+    const messages = toV1RequestMessages(event.messages, event.sessionID, origins)
+    await handler({}, { messages })
+    event.messages = fromV1RequestMessages(messages, origins)
   })
 }

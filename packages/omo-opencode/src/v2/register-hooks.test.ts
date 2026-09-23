@@ -1,6 +1,6 @@
 // packages/omo-opencode/src/v2/register-hooks.test.ts
 import { describe, expect, it } from "bun:test"
-import { registerOmoSystemHook, registerOmoToolHooks } from "./register-hooks"
+import { registerOmoMessagesHook, registerOmoSystemHook, registerOmoToolHooks } from "./register-hooks"
 import type { HookRegistration, V2SessionHookRegistrar, V2ToolHookRegistrar } from "./register-hooks"
 import type { V1ToolAfterInput, V1ToolAfterOutput, V1ToolBeforeInput, V1ToolBeforeOutput } from "./tool-hook-mapping"
 
@@ -196,6 +196,70 @@ describe("registerOmoSystemHook", () => {
     let called = 0
     await registerOmoSystemHook(registrar, () => { called += 1 })
     await invoke("context", { sessionID: "ses_1" })
+    expect(called).toBe(0)
+  })
+})
+
+describe("registerOmoMessagesHook", () => {
+  const event = () => ({
+    sessionID: "ses_1",
+    model: { id: "sonnet", providerID: "anthropic" },
+    system: [],
+    messages: [
+      { id: "msg_u1", role: "user", content: [{ type: "text", text: "hi", cache: { type: "ephemeral" } }] },
+      {
+        id: "msg_a1",
+        role: "assistant",
+        content: [
+          { type: "text", text: "ok" },
+          { type: "tool-call", id: "call_1", name: "grep", input: { pattern: "x" } },
+        ],
+      },
+    ],
+  })
+
+  it("presents the V1 {info, parts} view and rebuilds it back onto the event", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    const seen: unknown[] = []
+    await registerOmoMessagesHook(registrar, (_input, output) => {
+      seen.push(output.messages.map((message) => message.info))
+      // The V1 validator's repair, in miniature.
+      const assistant = output.messages[1]!
+      assistant.parts.push({
+        type: "tool_result",
+        toolUseId: "call_1",
+        tool_use_id: "call_1",
+        isError: true,
+        content: [{ type: "text", text: "[tool result missing]" }],
+      })
+    })
+
+    const target = event() as Record<string, unknown>
+    await invoke("context", target)
+
+    expect(seen).toEqual([
+      [
+        { role: "user", id: "msg_u1", sessionID: "ses_1" },
+        { role: "assistant", id: "msg_a1", sessionID: "ses_1" },
+      ],
+    ])
+    const content = (target.messages as Record<string, unknown>[])[1]!.content as Record<string, unknown>[]
+    expect(content[2]).toEqual({
+      type: "tool-result",
+      id: "call_1",
+      name: "grep",
+      result: { type: "error", value: "[tool result missing]" },
+    })
+    // Untouched parts keep their origin fields.
+    const userContent = (target.messages as Record<string, unknown>[])[0]!.content as Record<string, unknown>[]
+    expect(userContent[0]).toEqual({ type: "text", text: "hi", cache: { type: "ephemeral" } })
+  })
+
+  it("skips malformed context events", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    let called = 0
+    await registerOmoMessagesHook(registrar, () => { called += 1 })
+    await invoke("context", { model: { id: "m", providerID: "p" } })
     expect(called).toBe(0)
   })
 })
