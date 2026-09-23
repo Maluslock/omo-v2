@@ -28,6 +28,12 @@ import {
   type V1CompactingInput,
   type V1CompactingOutput,
 } from "./compaction-hook-mapping"
+import {
+  applyV1ChatMessage,
+  toV1ChatMessage,
+  type V1ChatMessageInput,
+  type V1ChatMessageOutput,
+} from "./prompt-hook-mapping"
 
 /**
  * V2 hook registration layer.
@@ -184,5 +190,32 @@ export async function registerOmoCompactionHook(
       return
     }
     applyV1Compacting(event, pair.output)
+  })
+}
+
+export type V1ChatMessageHandler = (
+  input: V1ChatMessageInput,
+  output: V1ChatMessageOutput,
+) => Promise<void> | void
+
+/**
+ * Register V1 `chat.message` on the V2 `prompt` hook. Only the prompt text round-trips; the
+ * message-level fields the V2 prompt cannot carry are reported once per field instead of being
+ * dropped silently (see `prompt-hook-mapping.ts`).
+ */
+export async function registerOmoPromptHook(
+  registrar: V2SessionHookRegistrar,
+  handler: V1ChatMessageHandler,
+): Promise<HookRegistration> {
+  const reported = new Set<string>()
+  return registrar("prompt", async (event) => {
+    const pair = toV1ChatMessage(event)
+    if (pair === undefined) return
+    await handler(pair.input, pair.output)
+    applyV1ChatMessage(event, pair.output, (field) => {
+      if (reported.has(field)) return
+      reported.add(field)
+      log(`[v2] chat.message cannot carry "${field}" on the V2 prompt`, { sessionID: pair.input.sessionID })
+    })
   })
 }

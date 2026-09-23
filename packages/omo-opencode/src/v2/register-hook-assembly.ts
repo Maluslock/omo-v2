@@ -11,6 +11,7 @@ import { startV2EventSubscription } from "./event-subscription"
 import {
   registerOmoCompactionHook,
   registerOmoMessagesHook,
+  registerOmoPromptHook,
   registerOmoSystemHook,
   registerOmoToolHooks,
   type HookRegistration,
@@ -29,11 +30,10 @@ type V2Ctx = Parameters<NonNullable<Parameters<typeof Plugin.define>[0]["setup"]
  * builds two manager sets or two tool registries.
  *
  * Registered here: `event.subscribe`, `tool.hook(execute.before|execute.after)`,
- * `session.hook(context)` for both the messages and system transforms, and
- * `session.hook(compaction)`.
+ * `session.hook(prompt)` for `chat.message`, `session.hook(context)` for both the messages and
+ * system transforms, and `session.hook(compaction)`.
  *
- * Not registered (documented gaps, see the P3 findings): `chat.message` → `session.hook(prompt)`
- * (semantics differ and need their own adapter), `chat.params`/`chat.headers` →
+ * Not registered (documented gaps, see the P3 findings): `chat.params`/`chat.headers` →
  * `session.hook("model.request")`, `tool.definition`, `command.execute.before`,
  * `experimental.compaction.autocontinue`, `permission.hook("evaluate")`, and
  * `shell.hook("create.before")`.
@@ -80,6 +80,10 @@ async function registerSessionHooks(
     session.hook(name, callback as never) as Promise<HookRegistration>
 
   const registrations: HookRegistration[] = []
+  const chatMessage = handlers["chat.message"]
+  if (typeof chatMessage === "function") {
+    registrations.push(await registerOmoPromptHook(registrar, chatMessage as never))
+  }
   const messages = handlers["experimental.chat.messages.transform"]
   if (typeof messages === "function") {
     registrations.push(await registerOmoMessagesHook(registrar, messages as never))

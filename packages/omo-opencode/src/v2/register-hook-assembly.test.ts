@@ -42,6 +42,7 @@ function createFixture() {
       calls.createdPluginInterfaces += 1
       return {
         event: async () => {},
+        "chat.message": async () => {},
         "tool.execute.before": async () => {},
         "tool.execute.after": async () => {},
         "experimental.chat.messages.transform": async () => {},
@@ -94,7 +95,7 @@ describe("registerOmoHooks", () => {
 
     expect(calls.subscribe).toBe(1)
     expect(calls.toolHooks).toEqual(["execute.before", "execute.after"])
-    expect(calls.sessionHooks).toEqual(["context", "context", "compaction"])
+    expect(calls.sessionHooks).toEqual(["prompt", "context", "context", "compaction"])
     expect(calls.createdPluginInterfaces).toBe(1)
   })
 
@@ -106,7 +107,7 @@ describe("registerOmoHooks", () => {
 
     expect(calls.subscribe).toBe(1)
     expect(calls.toolHooks).toHaveLength(2)
-    expect(calls.sessionHooks).toHaveLength(3)
+    expect(calls.sessionHooks).toHaveLength(4)
     expect(calls.createdPluginInterfaces).toBe(1)
   })
 
@@ -119,6 +120,7 @@ describe("registerOmoHooks", () => {
     expect(calls.disposedRegistrations).toEqual([
       "tool:execute.before",
       "tool:execute.after",
+      "session:prompt",
       "session:context",
       "session:context",
       "session:compaction",
