@@ -289,6 +289,12 @@ V2 实测（`.omo/evidence/20260923-v2-alignment/live-provider-domain.json`）�
 所以这块**不是缺口**：不实现不会让模型可用性退化，而"用 activation 推断 connected"反而可能基于错误
 信号**收窄**模型集合，比不过滤更糟。这一条按"已评估、故意不实现"记录。
 
+**如果将来真要恢复严格的 connected 语义**，这次测量留下了两条线索（都还没验证，不要当结论用）：
+`ctx.provider.transform` 的 `ProviderRecord` 带 `sourceConnection?: ConnectionInfo`（编辑器的
+`list()` 只有 transform 里能拿到）；以及 provider 条目带 `integrationID`，而 `ctx.integration`
+是可用的域——"provider 的 integrationID 出现在 `integration.list()` 里"可能更接近"已连接"。真要做得
+先把 V2 的 integration/credential 语义验证清楚，并且必须比现在的 fail-open 更准才值得换。
+
 ### 7.5 可攻破点 D：`session_*` 工具其实可以无 client 运行
 
 `tools/session-manager/storage.ts` 的逻辑是 `isSqliteBackend() && sdkClient ? SDK : 文件回退`，

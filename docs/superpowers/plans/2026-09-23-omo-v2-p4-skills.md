@@ -62,6 +62,11 @@ So the missing surface degrades nothing that matters, while implementing it woul
 from `activation` and could *narrow* the model set on a signal that does not mean "credentialed",
 which is worse than not filtering. Recorded as an assessment, not a gap.
 
+Leads left for anyone who later wants strict `connected` semantics, neither verified: the provider
+transform editor exposes `ProviderRecord.sourceConnection`, and provider entries carry
+`integrationID` while `ctx.integration` is an available domain. Any future attempt has to be proven
+more accurate than the current fail-open fallback before it is worth taking.
+
 ## Verification
 
 - Unit: `skill-mapping.test.ts` (9), `register-skills.test.ts` (8), updated
