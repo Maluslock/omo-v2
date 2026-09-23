@@ -72,7 +72,7 @@ omo tools:  omo_grep omo_glob omo_interactive_bash
 
 Agent 模型链、tool 限制、categories 注入沿用 V1（P1 只做形状映射），因此与官方"每 agent 不同模型组合"一致。
 
-### Tools：官方 20–39 → V2 注册 9
+### Tools：官方 20–39 → **默认配置 9，开齐配置开关 15**（见 §7 修正）
 
 | 工具组 | 官方 | V2 | 说明 |
 |---|---|---|---|
@@ -143,3 +143,72 @@ V2 的 8 个注册**扇出到 V1 的 hook 组合**，因此覆盖面远大于 8�
 - 事件订阅与各 V1 guard hook 的**逐项效果**尚未断言（只确认注册成功与 `context` hook 触发）。
 - 本轮使用真实 service/配置（隔离实例因固定服务端口 49374 被占用而无法启动），会话写入真实
   `~/.local/share/opencode/opencode.db`；未修改用户任何配置文件。
+
+
+---
+
+## 7. 重要修正与「可攻破点」（2026-09-23 追加）
+
+初版矩阵低估了对齐度。三点修正 + 四个已从官方文档/源码确认的可攻破点：
+
+### 7.1 修正：很多"缺失工具"只是配置开关没开
+
+omo 的 opencode 专属配置必须放在 **`"[opencode]"`（带方括号的键）** 这个 harness block 里，不是顶层、
+也不是 `opencode`。实测（同一真机、只改配置）：
+
+| 配置 | V1 registry | V2 注册的 omo 工具 |
+|---|---|---|
+| 默认 | 14 | **9** |
+| `"[opencode]": { hashline_edit, goal.enabled, experimental.task_system }` | 22 | **15** |
+
+新出现的 6 个：`omo_edit`(hashline)、`omo_create_goal` / `omo_update_goal` / `omo_get_goal`、
+`omo_task_get` / `omo_task_list`。所以默认矩阵里的"缺 edit / goal / task_get"**不是移植缺陷**。
+
+（顺带：`hephaestus` 缺失的真因是 `[agent-registration] Agent skipped: unsupported Hephaestus model`——
+它的配置模型 `new-api/kimi-k2.7-code` 不被识别，属配置问题。）
+
+### 7.2 可攻破点 A：`ctx.mcp.transform` → 恢复 5 个内置 MCP（含 8 个 LSP 工具）
+
+```ts
+interface MCPEditor { list(); get(name); set(name, config); update(name, update); remove(name) }
+```
+V2 插件**可以注册 MCP server**。omo 的 tier-1 内置 MCP（`lsp` 提供全部 8 个 `lsp_*` 工具、
+`codegraph`，以及 3 个远端 MCP）因此是可移植的，不是只能等上游。**这是目前性价比最高的一块。**
+
+### 7.3 可攻破点 B：`ctx.command.transform.add` → 恢复 6 个 slash 命令
+
+```ts
+interface CommandDefinition { name; description?; execute(input: {sessionID, prompt, delivery}) }
+```
+命令的定义带**每调用回调**，因此 `/init-deep`、`/goal`、`/refactor`、`/start-work`、
+`/stop-continuation`、`/handoff` 可以在 V2 重实现（V1 的 `command.execute.before` 是全局拦截，
+语义不完全等价，但 omo 这 6 个命令都是"模板展开 + 注入"，可以 1:1 落成命令定义）。
+
+### 7.4 可攻破点 C：`ctx.skill.transform` → 注册 skill（含 8 个内置 skill set）
+
+```ts
+interface SkillEditor { list(); get(id); add(skill); update(id, u); remove(id) }
+```
+`SkillDomain` 还有 `list`。omo 的 builtin skills / skill sets 可以注册进 V2。
+
+### 7.5 可攻破点 D：`session_*` 工具其实可以无 client 运行
+
+`tools/session-manager/storage.ts` 的逻辑是 `isSqliteBackend() && sdkClient ? SDK : 文件回退`，
+而 `tools.ts:71` 只是 `setStorageClient(ctx.client)`。V2 下 `ctx.client` 即我们注入的 shim；
+**若不注入（或让 sdkClient 为 null），四个 `session_*` 工具会走 `getFileMainSessions` 等文件回退路径**
+——也就是说"需要 session.list"这个拉黑理由并不成立于它们全体。需实测确认文件回退在本环境能否读到数据。
+
+同理可再评估：
+- `task_create` / `task_update`：`todo-sync` 依赖 `session.todo`，shim 已提供空 stub；是否只降级而不崩，待测。
+- `skill` 工具：唯一卡点是 `ctx.ask`（V2 ToolContext 无 ask）。V2 有 `permission.hook("evaluate")` +
+  `ctx.permission.list/get/reply`，可以把"询问用户"改成"策略判定"或走 permission 域，从而解锁。
+
+### 7.6 修正后的缺口排序
+
+1. **MCP（含 8 个 LSP 工具）** —— 有 `ctx.mcp.transform`，可做；
+2. **Commands + skill 注册** —— 有 `ctx.command.transform` / `ctx.skill.transform`，可做；
+3. **`session_*` 四个** —— 走文件回退，可能零成本解锁；
+4. **`skill` 工具** —— 用 permission 域替代 ask；
+5. **team-mode / monitor** —— 工具本身在拉黑名单，需确认真实依赖。
+
+即：**官方 20–39 的区间里，绝大多数是有路径的**，真正无解的目前只有"V2 不暴露的 host 能力"这一类。
