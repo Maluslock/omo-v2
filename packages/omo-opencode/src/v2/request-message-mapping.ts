@@ -105,11 +105,25 @@ export function toV1RequestMessages(
   origins: RequestMessageOrigins,
 ): V1RequestMessage[] {
   if (!Array.isArray(messages)) return []
-  return messages.filter(isRecord).map((message) => {
+
+  const records = messages.filter(isRecord)
+  // V2 keeps a tool result in its OWN message, not in the message that carries the tool call. The
+  // V1 view marks a call terminal through `state.status`, so result ids must be collected across the
+  // whole request. Looking only inside the call's own message marked every finished call as
+  // `running`, which made `tool-pair-validator` "repair" a healthy conversation by injecting a
+  // `tool_result` part into a user message; OpenAI-compatible lowering rejects exactly that
+  // ("user messages only support text and media content"). See
+  // `.omo/evidence/20260923-v2-alignment/live-tool-turn-bug.md`.
+  const resultIDs = new Set<string>()
+  for (const message of records) {
+    const content = Array.isArray(message.content) ? message.content : []
+    for (const part of content) {
+      if (isRecord(part) && part.type === "tool-result" && typeof part.id === "string") resultIDs.add(part.id)
+    }
+  }
+
+  return records.map((message) => {
     const parts = Array.isArray(message.content) ? message.content.filter(isRecord) : []
-    const resultIDs = new Set(
-      parts.filter((part) => part.type === "tool-result" && typeof part.id === "string").map((part) => part.id as string),
-    )
     const info: Record<string, unknown> = {
       ...(typeof message.role === "string" ? { role: message.role } : {}),
       ...(typeof message.id === "string" ? { id: message.id } : {}),

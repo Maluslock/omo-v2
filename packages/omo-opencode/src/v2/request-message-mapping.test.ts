@@ -1,11 +1,37 @@
 // packages/omo-opencode/src/v2/request-message-mapping.test.ts
 import { describe, expect, it } from "bun:test"
+import { createToolPairValidatorHook } from "../hooks/tool-pair-validator"
 import {
   createRequestMessageOrigins,
   fromV1RequestMessages,
   toV1RequestMessages,
   v1ContentFromV2Result,
 } from "./request-message-mapping"
+
+/**
+ * The shape opencode V2 actually sends: the tool call is in the assistant message and its result is
+ * in the NEXT message. The fixture above keeps both in one message, which is what made a
+ * per-message result lookup look correct.
+ */
+const V2_SPLIT_TOOL_MESSAGES = [
+  {
+    id: "msg_a1",
+    role: "assistant",
+    content: [{ type: "tool-call", id: "call_1", name: "glob", input: { pattern: "*.md" } }],
+  },
+  {
+    id: "msg_u2",
+    role: "user",
+    content: [
+      {
+        type: "tool-result",
+        id: "call_1",
+        name: "glob",
+        result: { type: "content", value: [{ type: "text", text: "1 match" }] },
+      },
+    ],
+  },
+]
 
 const V2_MESSAGES = [
   {
@@ -156,6 +182,52 @@ describe("fromV1RequestMessages", () => {
   it("tolerates a non-array input", () => {
     const origins = createRequestMessageOrigins()
     expect(fromV1RequestMessages(null, origins)).toEqual([])
+  })
+
+  it("marks a tool call finished when its result arrives in a later message", () => {
+    // given a V2 request whose tool result lives in its own message
+    const origins = createRequestMessageOrigins()
+
+    // when
+    const v1 = toV1RequestMessages(V2_SPLIT_TOOL_MESSAGES, "ses_1", origins)
+
+    // then the V1 view reports the call as terminal instead of still running
+    const call = v1[0].parts.find((part) => part.type === "tool") as { state?: { status?: string } } | undefined
+    expect(call?.state?.status).toBe("completed")
+  })
+
+  it("leaves tool-pair-validator with nothing to repair, so no tool_result is injected", async () => {
+    // given the same request, run through the hook that used to corrupt it
+    const origins = createRequestMessageOrigins()
+    const v1 = toV1RequestMessages(V2_SPLIT_TOOL_MESSAGES, "ses_1", origins)
+    const hook = createToolPairValidatorHook()
+    const transform = hook["experimental.chat.messages.transform"]
+    if (!transform) throw new Error("missing tool pair validator transform")
+
+    // when
+    await transform({}, { messages: v1 as never })
+
+    // then the only result is the genuine one: no placeholder was pushed into any message (that is
+    // what made the provider reject the next request with "user messages only support text and
+    // media content")
+    const results = v1.flatMap((message) => message.parts).filter((part) => part.type === "tool_result")
+    expect(results).toHaveLength(1)
+    expect(JSON.stringify(results[0])).toContain("1 match")
+    expect(JSON.stringify(v1)).not.toContain("Tool output unavailable")
+    expect(v1[1].parts.map((part) => part.type)).toEqual(["tool_result"])
+  })
+
+  it("still reports a genuinely unresolved tool call as running", () => {
+    // given an assistant tool call with no result anywhere in the request
+    const origins = createRequestMessageOrigins()
+    const messages = [V2_SPLIT_TOOL_MESSAGES[0]]
+
+    // when
+    const v1 = toV1RequestMessages(messages, "ses_1", origins)
+
+    // then the repair hook still has a reason to act
+    const call = v1[0].parts.find((part) => part.type === "tool") as { state?: { status?: string } } | undefined
+    expect(call?.state?.status).toBe("running")
   })
 })
 
