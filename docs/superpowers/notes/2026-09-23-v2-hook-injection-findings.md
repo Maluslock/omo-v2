@@ -163,3 +163,23 @@ reuse all 12 handler factories unchanged and only add the bridge layer.
 - **Plugin-injection QA remains blocked in this sandbox** (see
   `.omo/evidence/20260923-v2-client-shim/plugin-discovery-blocker.md`), so hook firing cannot be
   proven end-to-end here; unit tests + shape pinning are the available evidence.
+
+---
+
+## 8. Task 5 correction: omo has no V1 `shell.env` / `permission.ask` hooks to port
+
+Grepping the V1 adapter shows omo never registered either hook:
+
+- **`shell.env`**: no handler exists anywhere under `packages/omo-opencode/src`.
+- **`permission.ask`**: the string appears only as an *event name* consumed by
+  `hooks/session-notification.ts:75`; there is no `permission.ask` hook handler.
+- Permissions were expressed two other ways, both already ported: as **agent tool restrictions**
+  (mapped to V2 agent permissions in P1, `v2/agent-mapping.ts`) and as **tool-execute guards**
+  (mapped in P3 task 3, e.g. `bashFileReadGuard`, `writeExistingFileGuard`, `prometheusMdOnly`).
+- The only runtime permission asks are `ctx.ask(...)` inside two tools
+  (`tools/skill/tools.ts:153`, `tools/monitor/monitor-start.ts:103`), and the V2 ToolContext has
+  no `ask` (P2 fail-closed).
+
+Therefore V2's `permission.hook("evaluate")` and `shell.hook("create.before")` are **new
+capabilities, not ports**. Wiring them would mean inventing policy omo never had; they are left
+out of P3 rather than implemented speculatively.

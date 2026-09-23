@@ -98,12 +98,21 @@ function stableStringify(value: unknown): string {
  */
 type LifecycleTarget = { shutdown: () => void | Promise<void> }
 
-type CachedManagers = {
+type OmoToolsResult = Awaited<ReturnType<typeof createTools>>
+
+type CachedRuntime = {
   managers: ReturnType<typeof createManagers>
+  toolsResult: OmoToolsResult
   cleanupTargets: Set<LifecycleTarget>
 }
 
-const managersCache = new Map<string, CachedManagers>()
+/** The managers + tool registry for one `(directory, context, config)` triple. */
+export type OmoRuntime = {
+  managers: ReturnType<typeof createManagers>
+  toolsResult: OmoToolsResult
+}
+
+const runtimeCache = new Map<string, CachedRuntime>()
 
 /**
  * `createManagers` captures the plugin context's `client`, so a manager set built for one
@@ -151,7 +160,7 @@ async function invokeLifecycle(target: unknown, methods: readonly string[]): Pro
   }
 }
 
-async function disposeManagers(entry: CachedManagers): Promise<void> {
+async function disposeManagers(entry: CachedRuntime): Promise<void> {
   const m = entry.managers as unknown as Record<string, unknown>
   await Promise.all([
     invokeLifecycle(m.tmuxSessionManager, ["cleanup", "stop", "dispose", "stopAll"]),
@@ -165,27 +174,33 @@ async function disposeManagers(entry: CachedManagers): Promise<void> {
   entry.cleanupTargets.clear()
 }
 
-async function getManagers(
+/**
+ * Load (or reuse) the managers + tool registry for one `(directory, context, config)` triple.
+ * Both `registerOmoTools` and `registerOmoHooks` go through here so a single `setup` never builds
+ * two manager sets (each `createManagers` starts a heartbeat interval, background pollers, and a
+ * process-global shutdown closure).
+ */
+async function loadOmoRuntime(
   directory: string,
   pluginConfig: OhMyOpenCodeConfig,
   client: unknown,
   generation: number,
   deps: RegisterToolsDeps,
-): Promise<ReturnType<typeof createManagers>> {
+): Promise<OmoRuntime> {
   const key = managersCacheKey(directory, pluginConfig, generation)
-  const cached = managersCache.get(key)
-  if (cached !== undefined) return cached.managers
+  const cached = runtimeCache.get(key)
+  if (cached !== undefined) return cached
 
   // Bound the cache to one entry per directory: evict + dispose any other fingerprint first.
   const prefix = `${directory}\u0000`
-  for (const [existingKey, entry] of [...managersCache]) {
+  for (const [existingKey, entry] of [...runtimeCache]) {
     if (!existingKey.startsWith(prefix)) continue
-    managersCache.delete(existingKey)
+    runtimeCache.delete(existingKey)
     await disposeManagers(entry)
   }
 
   const cleanupTargets = new Set<LifecycleTarget>()
-  const created = deps.createManagers({
+  const managers = deps.createManagers({
     ctx: { directory, client } as never,
     pluginConfig,
     tmuxConfig: createRuntimeTmuxConfig(pluginConfig),
@@ -198,13 +213,34 @@ async function getManagers(
       },
     },
   })
-  managersCache.set(key, { managers: created, cleanupTargets })
-  return created
+  const toolsResult = await deps.createTools({
+    ctx: { directory, client } as never,
+    pluginConfig,
+    managers,
+  })
+  const entry: CachedRuntime = { managers, toolsResult, cleanupTargets }
+  runtimeCache.set(key, entry)
+  return entry
 }
 
-/** Test seam: clears the memoized managers (production never calls this). */
+/** Resolve the runtime for a V2 context, creating the client shim and generation key. */
+export async function resolveOmoRuntime(
+  ctx: V2Ctx,
+  pluginConfig: OhMyOpenCodeConfig,
+  deps: Partial<RegisterToolsDeps> = {},
+): Promise<OmoRuntime> {
+  const directory = ctx.location.directory
+  const resolvedDeps: RegisterToolsDeps = { ...defaultDeps, ...deps }
+  // The V2 domain methods use branded ids and optional-input signatures that TypeScript's
+  // contravariant parameter checking rejects against the structural shim type; the runtime shape
+  // is pinned by `client-shim.test.ts` and the P2.5 probe, so bridge the declarations here.
+  const client = createV1ClientShim(ctx as unknown as V2ClientShimSource)
+  return loadOmoRuntime(directory, pluginConfig, client, contextGeneration(ctx), resolvedDeps)
+}
+
+/** Test seam: clears the memoized runtime (production never calls this). */
 export function resetOmoManagersCache(): void {
-  managersCache.clear()
+  runtimeCache.clear()
   contextGenerations.clear()
   contextGenerationCounter = 0
 }
@@ -236,18 +272,8 @@ export async function registerOmoTools(
   }
 
   const directory = ctx.location.directory
-  const resolvedDeps: RegisterToolsDeps = { ...defaultDeps, ...deps }
-  // The V2 domain methods use branded ids and optional-input signatures that TypeScript's
-  // contravariant parameter checking rejects against the structural shim type; the runtime shape
-  // is pinned by `client-shim.test.ts` and the P2.5 probe, so bridge the declarations here.
-  const client = createV1ClientShim(ctx as unknown as V2ClientShimSource)
-  const generation = contextGeneration(ctx)
-  const managers = await getManagers(directory, pluginConfig, client, generation, resolvedDeps)
-  const { filteredTools } = await resolvedDeps.createTools({
-    ctx: { directory, client } as never,
-    pluginConfig,
-    managers,
-  })
+  const { toolsResult } = await resolveOmoRuntime(ctx, pluginConfig, deps)
+  const filteredTools = toolsResult.filteredTools
 
   // `ToolsRecord` values are typed against @opencode-ai/plugin's vendored zod (4.1.8) while
   // `toV2Tool` is typed against this package's zod (4.4.3). The runtime shape is identical

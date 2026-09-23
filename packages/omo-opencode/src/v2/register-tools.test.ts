@@ -9,6 +9,7 @@ import {
   SHIM_UNLOCKED_TOOLS,
   registerOmoTools,
   resetOmoManagersCache,
+  resolveOmoRuntime,
 } from "./register-tools"
 
 type MockTool = {
@@ -299,5 +300,35 @@ describe("registerOmoTools", () => {
       registerOmoTools({ location: { directory } } as never, {} as never, deps),
     ).resolves.toBeUndefined()
     expect(getManagerCalls()).toBe(0)
+  })
+})
+
+describe("resolveOmoRuntime", () => {
+  it("builds managers and tools once and shares them across callers", async () => {
+    const editor = createMockEditor()
+    const { deps, getManagerCalls } = createFakeDeps({ glob: fakeTool("glob") })
+    let toolCalls = 0
+    deps.createTools = (async () => {
+      toolCalls += 1
+      return { filteredTools: { glob: fakeTool("glob") } }
+    }) as never
+    const ctx = createMockCtx(directory, editor)
+
+    const first = await resolveOmoRuntime(ctx as never, {} as never, deps)
+    const second = await resolveOmoRuntime(ctx as never, {} as never, deps)
+
+    expect(first).toBe(second)
+    expect(getManagerCalls()).toBe(1)
+    expect(toolCalls).toBe(1)
+  })
+
+  it("rebuilds the runtime when the context identity changes", async () => {
+    const editor = createMockEditor()
+    const { deps, getManagerCalls } = createFakeDeps({ glob: fakeTool("glob") })
+
+    await resolveOmoRuntime(createMockCtx(directory, editor) as never, {} as never, deps)
+    await resolveOmoRuntime(createMockCtx(directory, editor) as never, {} as never, deps)
+
+    expect(getManagerCalls()).toBe(2)
   })
 })
