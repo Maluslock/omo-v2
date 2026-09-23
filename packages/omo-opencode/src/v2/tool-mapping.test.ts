@@ -2,7 +2,7 @@
 import { describe, expect, it } from "bun:test"
 import { tool } from "@opencode-ai/plugin"
 import { z } from "zod"
-import { normalizeToolResult, toV2Tool } from "./tool-mapping"
+import { normalizeToolResult, stripForeignJsonSchemaOverride, toV2Tool } from "./tool-mapping"
 
 describe("normalizeToolResult", () => {
   it("wraps a plain string", () => {
@@ -173,5 +173,20 @@ describe("toV2Tool", () => {
     const res = await v2.execute({}, { sessionID: "s", agent: "a", messageID: "m", id: "c", progress: async () => {} } as never)
     expect(res).toEqual({ content: "done" })
     expect(seen).toEqual([{ permission: "shell", patterns: ["*"], always: [], metadata: {} }])
+  })
+})
+
+describe("stripForeignJsonSchemaOverride", () => {
+  it("removes the _zod.toJSONSchema override installed by normalizeToolArgSchemas", () => {
+    const schema: Record<string, unknown> = { _zod: { toJSONSchema: () => ({}) } }
+    expect(stripForeignJsonSchemaOverride(schema)).toBe(true)
+    expect("toJSONSchema" in (schema._zod as Record<string, unknown>)).toBe(false)
+  })
+
+  it("reports false when there is nothing to strip", () => {
+    expect(stripForeignJsonSchemaOverride({ _zod: {} })).toBe(false)
+    expect(stripForeignJsonSchemaOverride({})).toBe(false)
+    expect(stripForeignJsonSchemaOverride(null)).toBe(false)
+    expect(stripForeignJsonSchemaOverride("x")).toBe(false)
   })
 })

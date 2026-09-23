@@ -52,6 +52,23 @@ export class ArgSchemaProvenanceError extends Error {
 }
 
 /**
+ * `createToolRegistry` runs `normalizeToolArgSchemas` over every tool, which installs a
+ * `_zod.toJSONSchema` override that delegates to `@opencode-ai/plugin`'s own zod instance. That
+ * is what V1 needs, but under V2 the host walks the schema with its own converter: hitting the
+ * delegating override hands a schema from one zod instance to another instance's converter and
+ * throws `undefined is not an object (evaluating 'seen.ref')`, so the host silently skips the
+ * tool ("Skipping invalid tool registration"). Removing the override at the V2 boundary lets each
+ * schema convert through its own instance. Verified on a live v2.0.11 host.
+ */
+export function stripForeignJsonSchemaOverride(arg: unknown): boolean {
+  if (typeof arg !== "object" || arg === null) return false
+  const zod = (arg as { _zod?: Record<string, unknown> })._zod
+  if (zod === undefined || !("toJSONSchema" in zod)) return false
+  delete zod.toJSONSchema
+  return true
+}
+
+/**
  * Fail loudly instead of letting V2 silently skip a tool whose `args` could not have been built
  * with the same zod instance as the `tool.schema.object(...)` wrapper.
  */
@@ -146,12 +163,14 @@ export function toV2Tool(
   execute: (input: unknown, context: V2Context) => Promise<{ content: string | V2Content[]; metadata?: Record<string, unknown> }>
   options: { namespace: string; codemode: false }
 } {
-  assertArgSchemaProvenance(name, def.args as unknown as Record<string, unknown>)
+  const args = def.args as unknown as Record<string, unknown>
+  assertArgSchemaProvenance(name, args)
+  for (const arg of Object.values(args)) stripForeignJsonSchemaOverride(arg)
   return {
     name,
     description: def.description,
     // Must use the args' own zod instance (`tool.schema`), not this package's zod — see above.
-    input: tool.schema.object(def.args as unknown as PluginArgsShape),
+    input: tool.schema.object(args as unknown as PluginArgsShape),
     options: { namespace: opts.namespace, codemode: false },
     execute: async (input, context) => {
       const controller = new AbortController()
