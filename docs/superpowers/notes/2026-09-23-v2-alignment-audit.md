@@ -196,7 +196,12 @@ interface SkillEditor { list(); get(id); add(skill); update(id, u); remove(id) }
 `tools/session-manager/storage.ts` 的逻辑是 `isSqliteBackend() && sdkClient ? SDK : 文件回退`，
 而 `tools.ts:71` 只是 `setStorageClient(ctx.client)`。V2 下 `ctx.client` 即我们注入的 shim；
 **若不注入（或让 sdkClient 为 null），四个 `session_*` 工具会走 `getFileMainSessions` 等文件回退路径**
-——也就是说"需要 session.list"这个拉黑理由并不成立于它们全体。需实测确认文件回退在本环境能否读到数据。
+——也就是说"需要 session.list"这个拉黑理由并不成立于它们全体。
+
+**实测结论（已做）**：直接调用 `getMainSessions({directory})` / `getAllSessions()` 且不注入 client，
+**能跑、不抛错，但返回 0 条**——文件回退读的是 omo 旧的文件布局，而 V2 的会话在 sqlite 里。
+所以这四个工具属于"能注册、无数据"：解锁它们只有形式意义，除非能拿到 V2 的会话列表。
+**结论：D 不是有效攻破点，session_* 仍是真缺口。**
 
 同理可再评估：
 - `task_create` / `task_update`：`todo-sync` 依赖 `session.todo`，shim 已提供空 stub；是否只降级而不崩，待测。
@@ -207,7 +212,7 @@ interface SkillEditor { list(); get(id); add(skill); update(id, u); remove(id) }
 
 1. **MCP（含 8 个 LSP 工具）** —— 有 `ctx.mcp.transform`，可做；
 2. **Commands + skill 注册** —— 有 `ctx.command.transform` / `ctx.skill.transform`，可做；
-3. **`session_*` 四个** —— 走文件回退，可能零成本解锁；
+3. ~~`session_*` 四个~~ —— 实测**无数据**（见 §7.5），仍是真缺口；
 4. **`skill` 工具** —— 用 permission 域替代 ask；
 5. **team-mode / monitor** —— 工具本身在拉黑名单，需确认真实依赖。
 
