@@ -468,3 +468,45 @@ No `failed to load plugin` lines; no `Skipping invalid tool registration` warnin
 **修复**（commit `c435560`）：`tool-mapping.ts` 改用产出 args 的同一实例 —— `tool.schema.object(def.args)`。
 
 > 教训：spike 只用同实例 zod 验证，因此漏掉了这个跨实例问题；凡是要把 zod schema 交给宿主转换的地方，都必须用「构造该 schema 的同一 zod 实例」。
+
+---
+
+## P2 结论修正（2026-09-23，真机复核）
+
+首次在**真实 V2 宿主**上跑通插件注入后，发现原 §9「P2 验证结果」中「3 个 omo 工具注册成功」
+的结论**不成立**。
+
+### 原结论为什么不成立
+
+`ctx.tool.transform(cb)` 的 `cb` 是**惰性、且会被反复调用**的：`await transform(...)` 返回时
+`cb` 还没执行。原探针在 `transform` 之后立刻读 `ctx.tool.list()`，读到的是**转换前的快照**，
+因此把「我们的计数器说注册了 9 个」误当成「宿主接受了 9 个」。真机日志显示的真相是：
+
+```
+level=ERROR message="Skipping invalid tool registration" namespace=omo name=glob
+  error="Invalid tool definition omo_glob: undefined is not an object (evaluating 'seen.ref')"
+```
+
+8 个 omo 工具**全部被宿主拒绝**，模型侧看到的是「There is no `omo_glob` tool」。
+
+### 真正的根因（与原 §P2 的 zod 判断不同）
+
+不是「args 与 wrapper 用了不同 zod 版本」，而是：
+
+`createToolRegistry` 对每个工具调用 `normalizeToolArgSchemas`，它给每个 arg schema 装上
+`_zod.toJSONSchema = () => tool.schema.toJSONSchema(schema)`（`@opencode-ai/plugin` 的 zod 实例）。
+V1 需要这个覆盖；V2 宿主自己走转换，命中该覆盖后**把一个 zod 实例的 schema 交给另一个实例的
+转换器**，在 `zod@4.4.3/v4/core/to-json-schema.js:223` 的 `flattenRef` 抛 `seen.ref`。
+
+实测证据：用我们 import 的根 zod 转换同一个 arg 同样失败（`rootToJSONSchemaOnArg` 失败），
+而 `arg["~standard"].jsonSchema.input === fresh["~standard"].jsonSchema.input` 为 **false**
+（`sameConverter: false`），即两个实例；单独用 4.4.3 转换一个全新 `z.string()` 是成功的。
+
+### 修复
+
+`packages/omo-opencode/src/v2/tool-mapping.ts` 新增 `stripForeignJsonSchemaOverride()`，
+在 V2 边界把该覆盖删掉，让每个 schema 用自己的实例转换（commit `4835f1a`）。
+
+真机前后对比（同一宿主）：注册错误 **8 → 0**；模型成功调用 `omo_glob {"pattern":"*.md"}`。
+
+详见 `.omo/evidence/20260923-v2-live-host/README.md`。
