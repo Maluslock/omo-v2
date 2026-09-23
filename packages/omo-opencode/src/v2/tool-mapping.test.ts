@@ -1,5 +1,6 @@
 // packages/omo-opencode/src/v2/tool-mapping.test.ts
 import { describe, expect, it } from "bun:test"
+import { tool } from "@opencode-ai/plugin"
 import { z } from "zod"
 import { normalizeToolResult, toV2Tool } from "./tool-mapping"
 
@@ -41,6 +42,25 @@ describe("toV2Tool", () => {
     expect(v2.description).toBe("d")
     expect(v2.options).toEqual({ namespace: "omo", codemode: false })
     expect(typeof v2.input.parse).toBe("function") // z.object(...) StandardSchema
+  })
+
+  it("builds the input schema with the args' own zod instance (tool.schema) and still validates", () => {
+    // Mirrors production: omo's args are declared with `@opencode-ai/plugin`'s `tool.schema`,
+    // so the wrapper must come from the same instance for V2's JSON-Schema extraction.
+    const v2 = toV2Tool(
+      "glob",
+      {
+        description: "d",
+        args: { pattern: tool.schema.string(), path: tool.schema.string().optional() },
+        execute: async () => "ok",
+      },
+      { namespace: "omo", directory: "/tmp" },
+    )
+    expect(v2.input.parse({ pattern: "x" })).toEqual({ pattern: "x" })
+    expect(v2.input.parse({ pattern: "x", path: "src" })).toEqual({ pattern: "x", path: "src" })
+    expect(() => v2.input.parse({})).toThrow()
+    // Same module instance as the args' harness: conversion to JSON Schema must not throw.
+    expect(typeof tool.schema.toJSONSchema(v2.input)).toBe("object")
   })
 
   it("shims V1 context (directory/sessionID/agent/metadata/abort) and normalizes result", async () => {

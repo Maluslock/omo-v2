@@ -1,4 +1,5 @@
 // packages/omo-opencode/src/v2/tool-mapping.ts
+import { tool } from "@opencode-ai/plugin"
 import { z } from "zod"
 
 export type V1ToolDefinition = {
@@ -6,6 +7,16 @@ export type V1ToolDefinition = {
   args: z.ZodRawShape
   execute: (args: any, context: any) => Promise<unknown>
 }
+
+/**
+ * V2 extracts a tool input schema by walking the schema object's own internals. `def.args`
+ * are built with `@opencode-ai/plugin`'s bundled zod (`tool.schema`), whose module instance
+ * differs from this package's zod (4.4.3). Wrapping a foreign zod's raw shape with
+ * `z.object(def.args)` (this package's zod) makes V2's JSON-Schema extraction throw
+ * (`seen.ref` / "Non-representable type encountered"), so the tool is silently skipped at
+ * registration. `tool.schema.object(...)` uses the args' own zod instance instead.
+ */
+type PluginArgsShape = Parameters<typeof tool.schema.object>[0]
 
 type V2Context = {
   sessionID: string
@@ -83,14 +94,15 @@ export function toV2Tool(
 ): {
   name: string
   description: string
-  input: z.ZodObject<z.ZodRawShape>
+  input: ReturnType<typeof tool.schema.object>
   execute: (input: unknown, context: V2Context) => Promise<{ content: string | V2Content[]; metadata?: Record<string, unknown> }>
   options: { namespace: string; codemode: false }
 } {
   return {
     name,
     description: def.description,
-    input: z.object(def.args),
+    // Must use the args' own zod instance (`tool.schema`), not this package's zod — see above.
+    input: tool.schema.object(def.args as unknown as PluginArgsShape),
     options: { namespace: opts.namespace, codemode: false },
     execute: async (input, context) => {
       const controller = new AbortController()
