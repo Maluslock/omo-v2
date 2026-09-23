@@ -63,6 +63,7 @@
           "refactor",
           "start-work",
           "stop-continuation",
+          "handoff",
           "remove-ai-slops",
           "hyperplan"
         ]

@@ -17,7 +17,7 @@ config/schema/
 ├── categories.ts               # 8 built-in + custom categories
 ├── hooks.ts                    # HookNameSchema (56 enum values; `team-tool-gating` is the only team-* one in schema; others are wired by direct config gates)
 ├── skills.ts                   # SkillsConfigSchema (sources, paths, recursive)
-├── commands.ts                 # BuiltinCommandNameSchema (goal, refactor, start-work, stop-continuation, remove-ai-slops, hyperplan)
+├── commands.ts                 # BuiltinCommandNameSchema (goal, refactor, start-work, stop-continuation, handoff, remove-ai-slops, hyperplan)
 ├── experimental.ts             # Feature flags incl plugin_load_timeout_ms (min 1000), task_system, max_tools
 ├── sisyphus.ts                 # SisyphusConfigSchema (task system)
 ├── sisyphus-agent.ts           # SisyphusAgentConfigSchema

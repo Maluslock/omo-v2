@@ -1262,6 +1262,7 @@
               "refactor",
               "start-work",
               "stop-continuation",
+              "handoff",
               "remove-ai-slops",
               "hyperplan"
             ]
@@ -13255,6 +13256,7 @@
                     "refactor",
                     "start-work",
                     "stop-continuation",
+                    "handoff",
                     "remove-ai-slops",
                     "hyperplan"
                   ]
