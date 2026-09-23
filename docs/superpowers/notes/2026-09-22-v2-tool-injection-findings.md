@@ -447,3 +447,24 @@ server listening on http://127.0.0.1:14400
 ```
 
 No `failed to load plugin` lines; no `Skipping invalid tool registration` warnings.
+
+## P2 验证结果（2026-09-22）
+
+隔离 V2（`/tmp/omo-v2-tool-probe`，`XDG_CONFIG_HOME` 隔离）实测：
+
+- 工具总数 62；其中 omo 命名空间 3 个：`omo_grep`、`omo_glob`、`omo_interactive_bash`
+  （`p2-tools.json`：`omoCount:3`，每项 `hasExecute:true`，`options:{namespace:"omo",codemode:false}`）
+- 真实执行：`omo_glob` 以 `{pattern:"*.md"}` 调用返回 `contentLength:8824`、`error:null`（非 `skipped`），内容以 `Found 100 file(s)` 开头
+- `Skipping invalid tool registration` = 0，`failed to load plugin` = 0，`level=ERROR` = 0
+
+### 关键缺陷（已修）
+
+首轮**零个 omo 工具注册成功**，报错：
+`Invalid tool definition omo_<name>: undefined is not an object (evaluating 'seen.ref')`
+
+根因 = **zod 实例混用**：omo 工具 `args` 由 `@opencode-ai/plugin` 自带 zod（`tool.schema`，4.1.8）构造，而适配器用 fork 根 zod（4.4.3）做 `z.object(args)` 包装。跨实例包装使 V2 的 JSON-Schema 提取崩溃。
+证据：`p2-zod-identity.json` 显示 `aVersion 4.4.3 / bVersion 4.1.8`、`aProcessJSONSchema:"function"` vs `bProcessJSONSchema:"undefined"`。
+
+**修复**（commit `c435560`）：`tool-mapping.ts` 改用产出 args 的同一实例 —— `tool.schema.object(def.args)`。
+
+> 教训：spike 只用同实例 zod 验证，因此漏掉了这个跨实例问题；凡是要把 zod schema 交给宿主转换的地方，都必须用「构造该 schema 的同一 zod 实例」。
