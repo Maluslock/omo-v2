@@ -4,9 +4,10 @@ import type { OhMyOpenCodeConfig } from "../config"
 import { createManagers } from "../create-managers"
 import { createRuntimeTmuxConfig } from "../create-runtime-tmux-config"
 import { createTools } from "../create-tools"
+import { registerManagerForCleanup, unregisterManagerForCleanup } from "../features/background-agent/process-cleanup"
 import { createModelCacheState } from "../plugin-state"
 import { log } from "../shared"
-import { toV2Tool } from "./tool-mapping"
+import { ArgSchemaProvenanceError, toV2Tool } from "./tool-mapping"
 
 type V2Ctx = Parameters<NonNullable<Parameters<typeof Plugin.define>[0]["setup"]>>[0]
 
@@ -89,32 +90,94 @@ function stableStringify(value: unknown): string {
  * `createManagers` has process-global side effects: it starts a non-unref'd TUI heartbeat
  * interval, constructs a BackgroundManager, and registers a process-level shutdown closure.
  * `setup` can run more than once (reloads), so managers are memoized per directory **and
- * construction-relevant config** to keep those side effects single-shot: a reload with a
- * different config gets fresh managers instead of silently reusing stale ones. `createTools`
- * is cheap and re-runs, which is fine because tool registration is idempotent.
+ * construction-relevant config**. The cache holds at most one live manager set per directory:
+ * when the fingerprint changes, the previous set is disposed and its global shutdown closure
+ * unregistered before fresh managers are built, so reloads cannot pile up heartbeat intervals,
+ * pollers, or shutdown handlers.
  */
-const managersCache = new Map<string, ReturnType<typeof createManagers>>()
+type LifecycleTarget = { shutdown: () => void | Promise<void> }
+
+type CachedManagers = {
+  managers: ReturnType<typeof createManagers>
+  cleanupTargets: Set<LifecycleTarget>
+}
+
+const managersCache = new Map<string, CachedManagers>()
 
 function managersCacheKey(directory: string, pluginConfig: OhMyOpenCodeConfig): string {
   return `${directory}\u0000${stableStringify(pluginConfig)}`
 }
 
-function getManagers(
+/**
+ * Best-effort, awaited teardown of one manager set. `createManagers` exposes no single
+ * `dispose`/`stop`/`stopAll` on its returned object; each member has its own lifecycle API:
+ * - `tmuxSessionManager.cleanup()`
+ * - `backgroundManager.shutdown()`
+ * - `skillMcpManager.disconnectAll()`
+ * - `monitorManager.shutdown()`
+ * - `tuiStateMirror.stop()` (clears the non-unref'd heartbeat interval)
+ * The method list also accepts `stop`/`dispose`/`stopAll` so a future/test-seam manager is torn down too.
+ */
+async function invokeLifecycle(target: unknown, methods: readonly string[]): Promise<void> {
+  if (typeof target !== "object" || target === null) return
+  for (const method of methods) {
+    const fn = (target as Record<string, unknown>)[method]
+    if (typeof fn !== "function") continue
+    try {
+      await Promise.resolve((fn as () => unknown).call(target))
+    } catch (error) {
+      log(`[v2] manager ${method}() during fingerprint-change dispose error:`, error)
+    }
+    return
+  }
+}
+
+async function disposeManagers(entry: CachedManagers): Promise<void> {
+  const m = entry.managers as unknown as Record<string, unknown>
+  await Promise.all([
+    invokeLifecycle(m.tmuxSessionManager, ["cleanup", "stop", "dispose", "stopAll"]),
+    invokeLifecycle(m.backgroundManager, ["shutdown", "stop", "dispose", "stopAll"]),
+    invokeLifecycle(m.skillMcpManager, ["disconnectAll", "shutdown", "stop", "dispose"]),
+    invokeLifecycle(m.monitorManager, ["shutdown", "stop", "dispose", "stopAll"]),
+    invokeLifecycle(m.tuiStateMirror, ["stop", "dispose", "shutdown"]),
+  ])
+  // Unregister the process-global shutdown closure `createManagers` registered for this set.
+  for (const target of entry.cleanupTargets) unregisterManagerForCleanup(target)
+  entry.cleanupTargets.clear()
+}
+
+async function getManagers(
   directory: string,
   pluginConfig: OhMyOpenCodeConfig,
   deps: RegisterToolsDeps,
-): ReturnType<typeof createManagers> {
+): Promise<ReturnType<typeof createManagers>> {
   const key = managersCacheKey(directory, pluginConfig)
   const cached = managersCache.get(key)
-  if (cached !== undefined) return cached
+  if (cached !== undefined) return cached.managers
+
+  // Bound the cache to one entry per directory: evict + dispose any other fingerprint first.
+  const prefix = `${directory}\u0000`
+  for (const [existingKey, entry] of [...managersCache]) {
+    if (!existingKey.startsWith(prefix)) continue
+    managersCache.delete(existingKey)
+    await disposeManagers(entry)
+  }
+
+  const cleanupTargets = new Set<LifecycleTarget>()
   const created = deps.createManagers({
     ctx: { directory } as never,
     pluginConfig,
     tmuxConfig: createRuntimeTmuxConfig(pluginConfig),
     modelCacheState: createModelCacheState(),
     backgroundNotificationHookEnabled: false,
+    deps: {
+      registerManagerForCleanupFn: (target: LifecycleTarget) => {
+        registerManagerForCleanup(target)
+        cleanupTargets.add(target)
+      },
+    },
   })
-  managersCache.set(key, created)
+  managersCache.set(key, { managers: created, cleanupTargets })
   return created
 }
 
@@ -152,7 +215,7 @@ export async function registerOmoTools(
 
   const directory = ctx.location.directory
   const resolvedDeps: RegisterToolsDeps = { ...defaultDeps, ...deps }
-  const managers = getManagers(directory, pluginConfig, resolvedDeps)
+  const managers = await getManagers(directory, pluginConfig, resolvedDeps)
   const { filteredTools } = await resolvedDeps.createTools({
     ctx: { directory } as never,
     pluginConfig,
@@ -172,7 +235,17 @@ export async function registerOmoTools(
       return []
     }
     registered.push(name)
-    return [toV2Tool(name, def as unknown as SourceTool, { namespace: NAMESPACE, directory })]
+    try {
+      return [toV2Tool(name, def as unknown as SourceTool, { namespace: NAMESPACE, directory })]
+    } catch (error) {
+      if (error instanceof ArgSchemaProvenanceError) {
+        log("[v2] FATAL: refusing to register tool with mismatched arg-schema provenance", {
+          name,
+          offendingArgs: error.offendingArgs,
+        })
+      }
+      throw error
+    }
   })
 
   await ctx.tool.transform((editor) => {

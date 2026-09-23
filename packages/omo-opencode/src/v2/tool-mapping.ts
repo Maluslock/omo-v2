@@ -18,6 +18,50 @@ export type V1ToolDefinition = {
  */
 type PluginArgsShape = Parameters<typeof tool.schema.object>[0]
 
+/**
+ * Root-zod schemas (this package's `zod`, 4.4.3) expose `_zod.processJSONSchema`; the schema
+ * objects produced by `tool.schema` (the plugin's bundled zod, 4.1.8) do not. V2's tool loader
+ * walks the input schema's own internals, so the wrapper and every arg schema must share the
+ * `tool.schema` provenance. Mixing instances makes extraction throw
+ * (`undefined is not an object (evaluating 'seen.ref')` / "Non-representable type encountered")
+ * and the tool is silently dropped at registration. See the F1/F4 findings.
+ */
+const TOOL_SCHEMA_PROVENANCE = hasRootZodProvenance(tool.schema.string())
+
+function hasRootZodProvenance(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false
+  const marker = (value as { _zod?: { processJSONSchema?: unknown } })._zod?.processJSONSchema
+  return typeof marker === "function"
+}
+
+/** Thrown when a tool's `args` were built with a different zod instance than the wrapper. */
+export class ArgSchemaProvenanceError extends Error {
+  readonly toolName: string
+  readonly offendingArgs: readonly string[]
+
+  constructor(toolName: string, offendingArgs: readonly string[]) {
+    super(
+      `tool "${toolName}" has args from a mismatched zod instance (${offendingArgs.join(", ")}); `
+        + "build args with @opencode-ai/plugin's `tool.schema` so V2 can extract a JSON Schema. "
+        + "Refusing to register the tool, which V2 would otherwise silently skip.",
+    )
+    this.name = "ArgSchemaProvenanceError"
+    this.toolName = toolName
+    this.offendingArgs = offendingArgs
+  }
+}
+
+/**
+ * Fail loudly instead of letting V2 silently skip a tool whose `args` could not have been built
+ * with the same zod instance as the `tool.schema.object(...)` wrapper.
+ */
+export function assertArgSchemaProvenance(toolName: string, args: Record<string, unknown>): void {
+  const offenders = Object.entries(args)
+    .filter(([, schema]) => hasRootZodProvenance(schema) !== TOOL_SCHEMA_PROVENANCE)
+    .map(([key]) => key)
+  if (offenders.length > 0) throw new ArgSchemaProvenanceError(toolName, offenders)
+}
+
 type V2Context = {
   sessionID: string
   agent: string
@@ -41,6 +85,10 @@ export type V1ToolContext = {
   agent: string
   directory: string
   worktree: string
+  // hashline-edit keys its metadata store off any of these; V2 exposes the call id as `id`.
+  callID: string
+  callId: string
+  call_id: string
   abort: AbortSignal
   metadata: (input: { title?: string; metadata?: Record<string, unknown> }) => void
   ask: (input: V1AskInput) => Promise<void>
@@ -98,6 +146,7 @@ export function toV2Tool(
   execute: (input: unknown, context: V2Context) => Promise<{ content: string | V2Content[]; metadata?: Record<string, unknown> }>
   options: { namespace: string; codemode: false }
 } {
+  assertArgSchemaProvenance(name, def.args as unknown as Record<string, unknown>)
   return {
     name,
     description: def.description,
@@ -112,6 +161,9 @@ export function toV2Tool(
         agent: context.agent,
         directory: opts.directory,
         worktree: opts.directory,
+        callID: context.id,
+        callId: context.id,
+        call_id: context.id,
         abort: controller.signal,
         metadata: (i: { title?: string; metadata?: Record<string, unknown> }) => {
           void context.progress({ ...(i.metadata ?? {}), ...(i.title !== undefined ? { title: i.title } : {}) })

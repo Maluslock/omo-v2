@@ -35,7 +35,7 @@ describe("toV2Tool", () => {
   it("passes zod args through and namespaces the tool", () => {
     const v2 = toV2Tool(
       "glob",
-      { description: "d", args: { pattern: z.string() }, execute: async () => "ok" },
+      { description: "d", args: { pattern: tool.schema.string() }, execute: async () => "ok" },
       { namespace: "omo", directory: "/tmp" },
     )
     expect(v2.name).toBe("glob")
@@ -61,6 +61,30 @@ describe("toV2Tool", () => {
     expect(() => v2.input.parse({})).toThrow()
     // Same module instance as the args' harness: conversion to JSON Schema must not throw.
     expect(typeof tool.schema.toJSONSchema(v2.input)).toBe("object")
+
+    // DISCRIMINATING provenance check. Root zod (this package's `zod`) marks its schemas with
+    // `_zod.processJSONSchema`; `tool.schema`'s bundled zod (4.1.8) does not. If `toV2Tool`
+    // regressed to `z.object(def.args)` (root zod wrapping tool.schema fields), this would be a
+    // function and V2's extraction would throw `undefined is not an object (evaluating 'seen.ref')`,
+    // silently dropping the tool. The control asserts the root-zod marker exists so the test truly
+    // separates the two constructions.
+    expect(
+      (v2.input as { _zod?: { processJSONSchema?: unknown } })._zod?.processJSONSchema,
+    ).toBeUndefined()
+    expect(
+      typeof (z.object({ pattern: z.string() }) as { _zod?: { processJSONSchema?: unknown } })._zod
+        ?.processJSONSchema,
+    ).toBe("function")
+  })
+
+  it("fails loudly on args built with root zod while the wrapper uses tool.schema", () => {
+    expect(() =>
+      toV2Tool(
+        "glob",
+        { description: "d", args: { pattern: z.string() }, execute: async () => "ok" },
+        { namespace: "omo", directory: "/tmp" },
+      ),
+    ).toThrow(/mismatched zod instance.*pattern/)
   })
 
   it("shims V1 context (directory/sessionID/agent/metadata/abort) and normalizes result", async () => {
@@ -69,7 +93,7 @@ describe("toV2Tool", () => {
       "probe",
       {
         description: "d",
-        args: { text: z.string() },
+        args: { text: tool.schema.string() },
         execute: async (args: { text: string }, ctx: Record<string, unknown>) => {
           seenCtx = ctx
           return `echo:${args.text}`
@@ -85,6 +109,10 @@ describe("toV2Tool", () => {
     expect(seenCtx?.sessionID).toBe("ses_1")
     expect(seenCtx?.agent).toBe("build")
     expect(seenCtx?.directory).toBe("/work")
+    // V2 names the tool-call id `id`; V1 consumers (hashline-edit) read callID/callId/call_id.
+    expect(seenCtx?.callID).toBe("call_1")
+    expect(seenCtx?.callId).toBe("call_1")
+    expect(seenCtx?.call_id).toBe("call_1")
     expect(typeof seenCtx?.metadata).toBe("function")
     expect(seenCtx?.abort).toBeInstanceOf(AbortSignal)
   })

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { z } from "zod"
 import {
   CLIENT_DEPENDENT_TOOLS,
   registerOmoTools,
@@ -199,6 +200,63 @@ describe("registerOmoTools", () => {
     await registerOmoTools(ctx, { monitor: { enabled: true } } as never, deps)
 
     expect(getManagerCalls()).toBe(2)
+  })
+
+  it("disposes the replaced manager set (per-manager lifecycle + cleanup unregister) on fingerprint change", async () => {
+    const editor = createMockEditor()
+    const stopped: string[] = []
+    const cleanupTargets: Array<{ shutdown: () => void }> = []
+    let created = 0
+    const makeManagers = () => {
+      created += 1
+      const tag = `mgr${created}`
+      return {
+        tmuxSessionManager: { cleanup: async () => { stopped.push(`${tag}.cleanup`) } },
+        backgroundManager: { shutdown: async () => { stopped.push(`${tag}.shutdown`) } },
+        skillMcpManager: { disconnectAll: async () => { stopped.push(`${tag}.disconnectAll`) } },
+        monitorManager: { shutdown: async () => { stopped.push(`${tag}.shutdown`) } },
+        tuiStateMirror: { stop: () => { stopped.push(`${tag}.stop`) } },
+        modelFallbackControllerAccessor: {},
+        configHandler: {},
+      }
+    }
+    const deps = {
+      createManagers: ((args: { deps?: { registerManagerForCleanupFn?: (t: { shutdown: () => void }) => void } }) => {
+        const managers = makeManagers()
+        // Simulate createManagers registering its process-global shutdown closure.
+        const target = { shutdown: () => {} }
+        args.deps?.registerManagerForCleanupFn?.(target)
+        cleanupTargets.push(target)
+        return managers
+      }) as never,
+      createTools: (async () => ({ filteredTools: { glob: fakeTool("glob") } })) as never,
+    }
+    const ctx = createMockCtx(directory, editor)
+
+    await registerOmoTools(ctx, {} as never, deps)
+    await registerOmoTools(ctx, { monitor: { enabled: true } } as never, deps)
+
+    expect(stopped).toEqual([
+      "mgr1.cleanup",
+      "mgr1.shutdown",
+      "mgr1.disconnectAll",
+      "mgr1.shutdown",
+      "mgr1.stop",
+    ])
+    // `disposeManagers` also called `unregisterManagerForCleanup` on the previous set's global
+    // shutdown closure (registered through the injected seam); a clean run proves it didn't throw.
+    expect(cleanupTargets).toHaveLength(2)
+  })
+
+  it("fails loudly instead of silently skipping when a tool's args use root zod", async () => {
+    const editor = createMockEditor()
+    const { deps } = createFakeDeps({ glob: { description: "d", args: { pattern: z.string() }, execute: async () => "ok" } })
+    const ctx = createMockCtx(directory, editor)
+
+    await expect(registerOmoTools(ctx, {} as never, deps)).rejects.toThrow(/mismatched zod instance.*pattern/)
+    // Nothing was added: the failure is loud, not a silent skip.
+    expect(editor.addCalls).toEqual([])
+    expect(editor.registry.size).toBe(0)
   })
 
   it("skips manager assembly when the V2 tool domain is unavailable", async () => {
