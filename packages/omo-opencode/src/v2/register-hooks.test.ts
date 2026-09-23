@@ -1,6 +1,11 @@
 // packages/omo-opencode/src/v2/register-hooks.test.ts
 import { describe, expect, it } from "bun:test"
-import { registerOmoMessagesHook, registerOmoSystemHook, registerOmoToolHooks } from "./register-hooks"
+import {
+  registerOmoCompactionHook,
+  registerOmoMessagesHook,
+  registerOmoSystemHook,
+  registerOmoToolHooks,
+} from "./register-hooks"
 import type { HookRegistration, V2SessionHookRegistrar, V2ToolHookRegistrar } from "./register-hooks"
 import type { V1ToolAfterInput, V1ToolAfterOutput, V1ToolBeforeInput, V1ToolBeforeOutput } from "./tool-hook-mapping"
 
@@ -260,6 +265,45 @@ describe("registerOmoMessagesHook", () => {
     let called = 0
     await registerOmoMessagesHook(registrar, () => { called += 1 })
     await invoke("context", { model: { id: "m", providerID: "p" } })
+    expect(called).toBe(0)
+  })
+})
+
+describe("registerOmoCompactionHook", () => {
+  it("runs the V1 compacting handler and injects its context into system", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    const seen: string[] = []
+    await registerOmoCompactionHook(registrar, (input, output) => {
+      seen.push(input.sessionID)
+      output.context.push("preserved todos")
+    })
+
+    const event: Record<string, unknown> = { sessionID: "ses_1", system: [{ type: "text", text: "base" }] }
+    await invoke("compaction", event)
+
+    expect(seen).toEqual(["ses_1"])
+    expect(event.system).toEqual([
+      { type: "text", text: "base" },
+      { type: "text", text: "preserved todos" },
+    ])
+  })
+
+  it("isolates a throwing compacting handler and leaves system untouched", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    await registerOmoCompactionHook(registrar, () => {
+      throw new Error("capture boom")
+    })
+
+    const event: Record<string, unknown> = { sessionID: "ses_1", system: [{ type: "text", text: "base" }] }
+    await expect(invoke("compaction", event)).resolves.toBeUndefined()
+    expect(event.system).toEqual([{ type: "text", text: "base" }])
+  })
+
+  it("skips malformed events", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    let called = 0
+    await registerOmoCompactionHook(registrar, () => { called += 1 })
+    await invoke("compaction", { system: [] })
     expect(called).toBe(0)
   })
 })

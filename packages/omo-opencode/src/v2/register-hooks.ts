@@ -22,6 +22,12 @@ import {
   toV1RequestMessages,
   type V1RequestMessage,
 } from "./request-message-mapping"
+import {
+  applyV1Compacting,
+  toV1Compacting,
+  type V1CompactingInput,
+  type V1CompactingOutput,
+} from "./compaction-hook-mapping"
 
 /**
  * V2 hook registration layer.
@@ -149,5 +155,34 @@ export async function registerOmoMessagesHook(
     const messages = toV1RequestMessages(event.messages, event.sessionID, origins)
     await handler({}, { messages })
     event.messages = fromV1RequestMessages(messages, origins)
+  })
+}
+
+export type V1CompactingHandler = (
+  input: V1CompactingInput,
+  output: V1CompactingOutput,
+) => Promise<void> | void
+
+/**
+ * Register V1 `experimental.session.compacting` on the V2 `compaction` hook. Failures are
+ * isolated and logged, matching V1's `runCompactionStep` so a broken compaction hook can never
+ * abort the user's compaction.
+ */
+export async function registerOmoCompactionHook(
+  registrar: V2SessionHookRegistrar,
+  handler: V1CompactingHandler,
+): Promise<HookRegistration> {
+  return registrar("compaction", async (event) => {
+    const pair = toV1Compacting(event)
+    if (pair === undefined) return
+    try {
+      await handler(pair.input, pair.output)
+    } catch (error) {
+      log("[v2] session.compaction hook failed", {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return
+    }
+    applyV1Compacting(event, pair.output)
   })
 }
