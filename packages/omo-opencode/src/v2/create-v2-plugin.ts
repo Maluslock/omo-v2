@@ -5,6 +5,7 @@ import { registerOmoAgents } from "./register-agents"
 import { registerOmoCommands } from "./register-commands"
 import { registerOmoHooks } from "./register-hook-assembly"
 import { registerOmoMcps } from "./register-mcps"
+import { registerOmoSkills } from "./register-skills"
 import { registerOmoTools } from "./register-tools"
 
 export type V2PluginDefinition = ReturnType<typeof Plugin.define>
@@ -28,6 +29,7 @@ export function createV2Plugin(): V2PluginDefinition {
         await registerOmoHooks(ctx, pluginConfig)
         await registerOmoMcps(ctx, pluginConfig)
         await registerOmoCommands(ctx, pluginConfig)
+        await registerOmoSkills(ctx, pluginConfig)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         log("[v2] registration skipped", { error: message })

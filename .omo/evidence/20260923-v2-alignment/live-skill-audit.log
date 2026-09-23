@@ -1,0 +1,41 @@
+project=/tmp/osk-qa-1402323/proj
+server_pid=1402332
+server_ready_after=2s
+--- omo registration line for this instance ---
+[2026-09-23T07:23:58.396Z] [v2] skills registered {"registered":19,"builtin":9,"fromDisk":17,"disabled":1,"unreadable":0,"names":["playwright","git-master","review-work","remove-ai-slops","init-deep","debugging","security-research","security-review","visual-qa","programming","start-work","coding-agent-sessions","ulw-research","ast-grep","data-scientist","refactor","ulw-plan","lsp-setup","ultimate-browsing"]}
+{
+  "count": 21,
+  "ids": [
+    "ast-grep",
+    "coding-agent-sessions",
+    "data-scientist",
+    "debugging",
+    "git-master",
+    "init-deep",
+    "lsp-setup",
+    "opencode",
+    "playwright",
+    "programming",
+    "refactor",
+    "remove-ai-slops",
+    "report",
+    "review-work",
+    "security-research",
+    "security-review",
+    "start-work",
+    "ultimate-browsing",
+    "ulw-plan",
+    "ulw-research",
+    "visual-qa"
+  ]
+}
+----
+PASS host builtin 'opencode' still present
+PASS a project skill with a builtin's name keeps the project path
+PASS omo registers compiled builtins under virtual /omo-builtin paths
+PASS omo registers shared-bundle skills from the materialized bundle
+PASS shared-bundle-only skills are present
+PASS every path omo registered for a disk skill exists on disk
+PASS disabled_skills removed 'frontend'
+PASS omo builtin content is not empty
+--- summary: pass=8 fail=0 ---

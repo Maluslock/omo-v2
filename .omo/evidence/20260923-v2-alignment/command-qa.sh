@@ -30,7 +30,8 @@ EOF
 cat > "$PROJ/.omo/omo.jsonc" <<EOF
 {
   "[opencode]": {
-    "disabled_commands": $DISABLED_JSON
+    "disabled_commands": $DISABLED_JSON,
+    "browser_automation_engine": { "provider": "playwright" }
   }
 }
 EOF
@@ -160,12 +161,63 @@ echo "    http=$SW_CODE agent_after=$(session_agent "$SW_SID")"
 echo "$SW_DELIVERED" | grep -qF "$SW_SID" && check 1 "start-work expanded \$SESSION_ID" || check 0 "start-work \$SESSION_ID"
 echo "$SW_DELIVERED" | grep -qF 'QA-PLAN' && check 1 "start-work delivered the user argument" || check 0 "start-work argument"
 
-echo "--- omo registration lines for THIS instance (disables 2 commands) ---"
-tail -n +$((OMO_BEFORE + 1)) "$OMO_LOG" | grep -a '"registered":5,"names":\["goal","refactor"' | head -3
-tail -n +$((OMO_BEFORE + 1)) "$OMO_LOG" | grep -qa '"registered":5,"names":\["goal","refactor"' \
-  && check 1 "omo registered exactly the 5 enabled commands" \
-  || check 0 "omo registered the 5 enabled commands"
-echo "(other instances of the plugin reload for their own locations; only the 5-command line is this one)"
+# Routes a python block's PASS/FAIL lines through check() so the summary and exit code see them.
+run_python_checks() {
+  while IFS= read -r line; do
+    case "$line" in
+      "PASS "*) check 1 "${line#PASS }" ;;
+      "FAIL "*) check 0 "${line#FAIL }" ;;
+      *) echo "$line" ;;
+    esac
+  done
+}
+
+echo "--- omo registration line for THIS instance (2 commands disabled, browser=playwright) ---"
+REG_LINE=$(tail -n +$((OMO_BEFORE + 1)) "$OMO_LOG" | grep -a "commands registered" | tail -1)
+echo "$REG_LINE"
+REG=$(python3 -c "
+import json, re, sys
+line = sys.argv[1]
+m = re.search(r'(\{\"registered\".*\})\s*\$', line)
+print(json.dumps(json.loads(m.group(1))) if m else '{}')
+" "$REG_LINE")
+run_python_checks < <(python3 - "$REG" <<'PY'
+import json, sys
+reg = json.loads(sys.argv[1])
+names = set(reg.get("names", []))
+expected_absent = {"handoff", "hyperplan"}
+expected_present = {
+    "goal", "refactor", "start-work", "stop-continuation", "remove-ai-slops",
+    "playwright", "frontend", "git-master", "review-work", "init-deep", "debugging",
+    "security-research", "security-review", "visual-qa",
+}
+print("PASS omo registered the 5 builtin commands plus 9 builtin skill commands"
+      if names == expected_present else f"FAIL command set was {sorted(names)}")
+print("PASS configured-off commands are absent"
+      if not (names & expected_absent) else f"FAIL disabled commands registered: {sorted(names & expected_absent)}")
+PY
+)
+
+echo "--- invoking a skill-backed command (/git-master) ---"
+GM_SID=$(new_session)
+GM_CODE=$(curl -s -o /dev/null -w '%{http_code}' $AUTH -X POST "$BASE/api/session/$GM_SID/command" \
+  -H 'content-type: application/json' -d '{"name":"git-master","text":"QA-SKILL"}')
+sleep 1
+read_delivered "$GM_SID" > "$RUN/gm-delivered.json"
+python3 - "$RUN/gm-delivered.json" <<'PY'
+import json, sys
+row = json.load(open(sys.argv[1]))
+print(f"    delivered_count={row['count']} len={len(row['text'])}")
+print("    head=" + json.dumps(row["text"][:80]))
+PY
+run_python_checks < <(python3 - "$RUN/gm-delivered.json" <<'PY'
+import json, sys
+text = json.load(open(sys.argv[1]))["text"]
+ok = "<skill-instruction>" in text and "QA-SKILL" in text
+print(("PASS " if ok else "FAIL ") + "git-master delivered the wrapped skill template with the user argument")
+PY
+)
+[ "$GM_CODE" = "204" ] && check 1 "git-master accepted (204)" || check 0 "git-master accepted (got $GM_CODE)"
 
 echo "--- command execution failures in this server ---"
 if grep -a "command execution failed" "$RUN/serve.log" > /dev/null; then

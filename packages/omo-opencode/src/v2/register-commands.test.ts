@@ -14,6 +14,11 @@ function createFixture() {
 
   const commands: Record<string, V1CommandDefinition> = {
     goal: { name: "goal", description: "(builtin) Set the goal", template: "GOAL $ARGUMENTS" },
+    "remove-ai-slops": {
+      name: "remove-ai-slops",
+      description: "(builtin) Remove AI slops",
+      template: "SLOP COMMAND $ARGUMENTS",
+    },
     "start-work": {
       name: "start-work",
       description: "(builtin) Start Atlas work session",
@@ -53,6 +58,10 @@ function createFixture() {
       loadArgs.push({ disabled, options })
       return commands
     }) as never,
+    resolveBuiltinSkills: (() => [
+      { name: "git-master", description: "Git workflow", template: "GIT SKILL BODY" },
+      { name: "remove-ai-slops", description: "skill copy", template: "SKILL SLOP BODY" },
+    ]) as never,
   }
 
   return { makeCtx, deps, added, executed, promptCalls, switchCalls, loadArgs }
@@ -70,11 +79,36 @@ describe("registerOmoCommands", () => {
     // when
     await registerOmoCommands(makeCtx("/work") as never, {} as never, deps)
 
+    // then builtin skill commands come first, then the real builtin commands
+    expect(added.map((entry) => entry.name)).toEqual(["git-master", "remove-ai-slops", "goal", "start-work"])
+    // the skill command is not what wins for a name both sources provide
+    expect(added.find((entry) => entry.name === "remove-ai-slops")?.description).not.toBe("skill copy")
+    expect(added.find((entry) => entry.name === "git-master")?.description).toBe("Git workflow")
+  })
+
+  it("lets a real builtin command win over a same-named skill command", async () => {
+    // given a skill and a command both named remove-ai-slops
+    const { makeCtx, deps, executed, promptCalls } = createFixture()
+
+    // when
+    await registerOmoCommands(makeCtx("/work") as never, {} as never, deps)
+    await executed.get("remove-ai-slops")!({ sessionID: "ses_1", prompt: { text: "x" }, delivery: "steer" })
+
+    // then the command's own template is delivered, not the skill wrapper body
+    const delivered = String(promptCalls[0].text)
+    expect(delivered).toBe("SLOP COMMAND x")
+    expect(delivered).not.toContain("SKILL SLOP BODY")
+  })
+
+  it("drops a skill command named in disabled_commands", async () => {
+    // given
+    const { makeCtx, deps, added } = createFixture()
+
+    // when
+    await registerOmoCommands(makeCtx("/work") as never, { disabled_commands: ["git-master"] } as never, deps)
+
     // then
-    expect(added).toEqual([
-      { name: "goal", description: "(builtin) Set the goal" },
-      { name: "start-work", description: "(builtin) Start Atlas work session" },
-    ])
+    expect(added.map((entry) => entry.name)).not.toContain("git-master")
   })
 
   it("loads commands with the V1 options so /start-work still prefers atlas", async () => {
@@ -136,7 +170,7 @@ describe("registerOmoCommands", () => {
     await registerOmoCommands(ctx as never, {} as never, deps)
 
     // then
-    expect(added).toHaveLength(2)
+    expect(added).toHaveLength(4)
   })
 
   it("skips registration when the V2 command domain is unavailable", async () => {

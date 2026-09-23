@@ -2,9 +2,11 @@
 import type { Plugin } from "@opencode/plugin"
 import type { OhMyOpenCodeConfig } from "../config"
 import { loadBuiltinCommands } from "../features/builtin-commands"
+import { builtinSkillsToCommandDefinitionRecord } from "../features/opencode-skill-loader"
 import { log } from "../shared"
 import { createCommandDeliver } from "./command-delivery"
 import { toV2CommandDefinitions } from "./command-mapping"
+import { resolveConfiguredBuiltinSkills } from "./register-skills"
 import { omoRuntimeKeyFor } from "./register-tools"
 
 type V2Setup = NonNullable<Parameters<typeof Plugin.define>[0]["setup"]>
@@ -25,6 +27,7 @@ type V2Context = Parameters<V2Setup>[0]
 
 export type RegisterCommandDeps = {
   readonly loadBuiltinCommands?: typeof loadBuiltinCommands
+  readonly resolveBuiltinSkills?: typeof resolveConfiguredBuiltinSkills
 }
 
 const registeredKeys = new Set<string>()
@@ -54,11 +57,23 @@ export async function registerOmoCommands(
   if (registeredKeys.has(key)) return
 
   const loadCommands = deps.loadBuiltinCommands ?? loadBuiltinCommands
+  const teamModeEnabled = pluginConfig.team_mode?.enabled ?? false
   const builtin = loadCommands(pluginConfig.disabled_commands, {
     useRegisteredAgents: true,
-    teamModeEnabled: pluginConfig.team_mode?.enabled ?? false,
+    teamModeEnabled,
   })
-  const definitions = toV2CommandDefinitions(builtin, createCommandDeliver(ctx))
+
+  // V1 also exposed every builtin skill as a slash command (`/git-master`, `/review-work`, ...), and
+  // spread those FIRST so a real command of the same name wins. `remove-ai-slops` and `init-deep`
+  // exist as both, which is exactly the collision that ordering resolves.
+  const disabledCommands = new Set<string>(pluginConfig.disabled_commands ?? [])
+  const resolveSkills = deps.resolveBuiltinSkills ?? resolveConfiguredBuiltinSkills
+  const skillCommands = builtinSkillsToCommandDefinitionRecord(resolveSkills(pluginConfig))
+  const enabledSkillCommands = Object.fromEntries(
+    Object.entries(skillCommands).filter(([name]) => !disabledCommands.has(name)),
+  )
+
+  const definitions = toV2CommandDefinitions({ ...enabledSkillCommands, ...builtin }, createCommandDeliver(ctx))
   const names = definitions.map((definition) => definition.name)
 
   await commandDomain.transform((editor) => {

@@ -1,0 +1,83 @@
+{
+  "provider": {
+    "count": 1,
+    "firstKeys": [
+      "activation",
+      "id",
+      "integrationID",
+      "name",
+      "package",
+      "settings"
+    ],
+    "first": {
+      "id": "opencode",
+      "integrationID": "opencode",
+      "name": "OpenCode Zen",
+      "activation": "enabled",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "apiKey": "public",
+        "baseURL": "https://opencode.ai/zen/v1"
+      }
+    }
+  },
+  "model": {
+    "count": 8,
+    "firstKeys": [
+      "capabilities",
+      "cost",
+      "enabled",
+      "id",
+      "limit",
+      "modelID",
+      "name",
+      "package",
+      "providerID",
+      "settings",
+      "status",
+      "time",
+      "variants"
+    ],
+    "first": {
+      "id": "jev-1.13-free",
+      "modelID": "jev-1.13-free",
+      "providerID": "opencode",
+      "name": "Jev 1.13 Free",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "apiKey": "public",
+        "baseURL": "https://opencode.ai/zen/v1",
+        "provider": "opencode"
+      },
+      "capabilities": {
+        "tools": false,
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "variants": [],
+      "time": {
+        "released": 1789430400000
+      },
+      "cost": [
+        {
+          "input": 0,
+          "output": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        }
+      ],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 64000,
+        "output": 0
+      }
+    }
+  }
+}

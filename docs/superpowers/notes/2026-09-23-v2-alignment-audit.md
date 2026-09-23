@@ -237,12 +237,57 @@ interface CommandDefinition { name; description?; execute(input: {sessionID, pro
    `Session.AgentNotFoundError` 丢掉 prompt，而 API 仍回 204。投递前改用现成的
    `resolveRegisteredAgentName` 解析，并在未注册时记 warning。
 
-### 7.4 可攻破点 C：`ctx.skill.transform` → 注册 skill（含 8 个内置 skill set）
+### 7.4 可攻破点 C：`ctx.skill.transform` → 注册 skill —— **已实现并真机验证**
 
 ```ts
 interface SkillEditor { list(); get(id); add(skill); update(id, u); remove(id) }
+interface Skill.Info { id; name; description?; autoinvoke?; path; content }
 ```
-`SkillDomain` 还有 `list`。omo 的 builtin skills / skill sets 可以注册进 V2。
+
+**实现**：`src/v2/skill-mapping.ts`（纯映射）+ `src/v2/register-skills.ts`（装配 + 注册），
+并把 V1 同样暴露的"skill 即 slash 命令"补进 `register-commands.ts`。
+
+**先测后写的三个事实**（否则映射一定写错）：
+
+1. V2 宿主**自己就会**发现 `.opencode/skills`、`.claude/skills`、`.agents/skills`，并且它自己的两个
+   内置 skill 用的 `path` 是**虚拟绝对路径**（`/builtin/opencode.md`）。所以 omo 只需要注册宿主看不到
+   的两类：编译进插件的 builtin skill、以及位于 `node_modules/@oh-my-opencode/shared-skills` 的
+   SKILL.md 包。
+2. `ctx.skill.transform` 里 `editor.get(id)` **看不到**宿主已发现的同名 skill，且 `add` 同名**不会覆盖**
+   宿主/项目的那一份 —— 无需额外防空，项目覆盖天然生效。
+3. V1 的 `definition.template` **不能直接当 content**：它被包了 `<skill-instruction>`、还带
+   `$ARGUMENTS` 块（会把占位符灌进模型上下文）。V2 要的是 SKILL.md 的原始 body，所以磁盘类 skill
+   重新读一遍文件并解 frontmatter。builtin 类没有文件，用虚拟路径 `/omo-builtin/<name>.md`，理由是
+   V1 的 `resolvedPath`（例如 dev-browser）指向发布包里根本不存在的目录。
+
+**真机验证**（8 断言全过，见 `.omo/evidence/20260923-v2-alignment/live-skill-audit.md`）：
+
+```
+[v2] skills registered {"registered":19,"builtin":9,"fromDisk":17,"disabled":1,"unreadable":0}
+宿主 skill 列表 = 21（omo 19 + 宿主自带 opencode/report）
+playwright  -> /omo-builtin/playwright.md          （编译进插件，虚拟路径）
+git-master  -> <proj>/.opencode/skills/git-master/SKILL.md   （项目覆盖胜出）
+ast-grep    -> <pkg>/dist/skills/ast-grep/SKILL.md （shared 包，真实文件）
+```
+
+`disabled_skills: ["frontend"]` 生效；"每条磁盘路径都真实存在"这条断言专门防住 V1 `resolvedPath`
+那种失效路径。命令侧同时长到 14 个（5 个内置命令 + 9 个 skill 命令），`/git-master` 真实调用后投递
+出 `<skill-instruction>` 包裹的模板（25 断言全过）。
+
+### 7.4.1 provider 域评估：**结论是不实现**（有据）
+
+V2 实测（`.omo/evidence/20260923-v2-alignment/live-provider-domain.json`）：
+`ctx.provider.list()` 的条目字段是 `activation/id/integrationID/name/package/settings`，
+**没有 `connected`，也没有任何凭据信号**；`activation` 是 `auto|enabled|disabled`，表达的是"启用"，
+不是"有可用凭据"。`ctx.model.list()` 则带 `providerID` + `id`。
+
+而 omo 的消费方本来就 fail-open：`fetchAvailableModels` 在 connected 未知/为空时会退回
+`client.model.list()`（shim 已提供），得到的 `provider/model` 集合与从
+`provider.list().data.all` 构造的完全相同；另一个调用点 `connected-providers-cache` 也有守卫，
+只是跳过缓存。
+
+所以这块**不是缺口**：不实现不会让模型可用性退化，而"用 activation 推断 connected"反而可能基于错误
+信号**收窄**模型集合，比不过滤更糟。这一条按"已评估、故意不实现"记录。
 
 ### 7.5 可攻破点 D：`session_*` 工具其实可以无 client 运行
 
@@ -264,11 +309,12 @@ interface SkillEditor { list(); get(id); add(skill); update(id, u); remove(id) }
 ### 7.6 修正后的缺口排序
 
 1. ~~**MCP（含 8 个 LSP 工具）**~~ —— **已完成并真机验证**（§7.2）；
-2. ~~**Commands（7 个 slash 命令）**~~ —— **已完成并真机验证**（§7.3）；`ctx.skill.transform` 的
-   skill 注册仍未做；
+2. ~~**Commands（7 个 slash 命令）**~~ —— **已完成并真机验证**（§7.3）；
+   ~~**Skills（builtin + shared 包 + skill 命令）**~~ —— **已完成并真机验证**（§7.4）；
 3. ~~`session_*` 四个~~ —— 实测**无数据**（见 §7.5），仍是真缺口；
-4. **`skill` 工具** —— 用 permission 域替代 ask；
+4. **`skill` 工具** —— 用 permission 域替代 ask（`ctx.session.skill` 也是候选路径）；
 5. **team-mode / monitor** —— 工具本身在拉黑名单，需确认真实依赖。
+6. ~~**provider / connected-providers**~~ —— **已评估，故意不实现**（§7.4.1）。
 
 即：**官方 20–39 的区间里，绝大多数是有路径的**，真正无解的目前只有"V2 不暴露的 host 能力"这一类。
 

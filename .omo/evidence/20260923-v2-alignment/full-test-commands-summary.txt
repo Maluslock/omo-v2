@@ -23,5 +23,5 @@ Full log: full-test-commands.log
 ## Same set as the pre-change baseline (recorded before this work)
 auto-slash-command (4), createPluginInterface command.execute.before (1),
 dist-bundle Bun globals (2), DMCA provenance (1), install-codex + codex installer
-version sync (2), auto-update-checker/checker (4, passes standalone: mock-isolation flakiness).
+version sync (2), auto-update-checker/checker (5, passes standalone: mock-isolation flakiness).
 None is in a package or file this change touches; no config-schema test regressed.
