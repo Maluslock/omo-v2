@@ -1,0 +1,64 @@
+project=/tmp/ocmd-qa-1358750/proj
+server_pid=1358759
+server_ready_after=2s
+--- goal sid=ses_f32e8f014ffeq5TP3xrnxX6qlz http=204
+    delivered_count=1 len=1277
+    head="<command-instruction>\nYou are setting a thread Goal - a persistent objective tha"
+    tail="use, resume, clear\n</command-instruction>\n\n<user-task>\nQA-OBJECTIVE\n</user-task>"
+PASS goal accepted (204)
+PASS goal delivered a non-trivial user message
+PASS goal expanded every placeholder
+PASS goal delivered: QA-OBJECTIVE
+--- stop-continuation sid=ses_f32e8e4ecffes95OR181a6m69e http=204
+    delivered_count=1 len=599
+    head="<command-instruction>\nStop all continuation mechanisms for the current session.\n"
+    tail=" to pause automated continuation and take manual control.\n</command-instruction>"
+PASS stop-continuation accepted (204)
+PASS stop-continuation delivered a non-trivial user message
+PASS stop-continuation expanded every placeholder
+--- refactor sid=ses_f32e8e050ffeWql8HA23Xik8yJ http=204
+    delivered_count=1 len=18831
+    head="<command-instruction>\n# Intelligent Refactor Command\n\n## Codex Harness Tool Comp"
+    tail=" do neither.**\n\n<user-request>\nQA-TARGET\n</user-request>\n\n</command-instruction>"
+PASS refactor accepted (204)
+PASS refactor delivered a non-trivial user message
+PASS refactor expanded every placeholder
+--- remove-ai-slops sid=ses_f32e8dbafffeuQODs7jYHo3jbe http=204
+    delivered_count=1 len=6483
+    head="<command-instruction>\n# Remove AI Slops Command\n\n## Codex Harness Tool Compatibi"
+    tail="eeping the original code\n</command-instruction>\n\n<user-request>\n\n</user-request>"
+PASS remove-ai-slops accepted (204)
+PASS remove-ai-slops delivered a non-trivial user message
+PASS remove-ai-slops expanded every placeholder
+--- handoff sid=ses_f32e8d724ffeXs9bsEM45O3gXp http=404
+    delivered_count=0 len=0
+    head=""
+    tail=""
+PASS handoff rejected as disabled/unknown (404)
+--- hyperplan sid=ses_f32e8d2b2ffeyv0tedGjRGaDA5 http=404
+    delivered_count=0 len=0
+    head=""
+    tail=""
+PASS hyperplan rejected as disabled/unknown (404)
+--- nonexistent-command sid=ses_f32e8ce42ffeBRXWYliuIvmCkL http=404
+    delivered_count=0 len=0
+    head=""
+    tail=""
+PASS nonexistent-command rejected as disabled/unknown (404)
+--- start-work sid=ses_f32e8c9e6ffe28myVUhdJgTDJN agent_before=build
+    delivered_count=1 len=7497
+    head="<command-instruction>\nYou are starting an Atlas work session.\n\n## ARGUMENTS\n\n- `/start-wor"
+    tail="g \"QA-PLAN\".\n No incomplete plans available. Create a new plan using the Prometheus agent."
+    http=204 agent_after=Atlas - Plan Executor
+PASS start-work accepted (204)
+PASS start-work switched the session to the registered atlas id
+PASS start-work expanded $SESSION_ID
+PASS start-work delivered the user argument
+--- omo registration lines for THIS instance (disables 2 commands) ---
+[2026-09-23T07:07:15.487Z] [v2] commands registered {"registered":5,"names":["goal","refactor","start-work","stop-continuation","remove-ai-slops"]}
+[2026-09-23T07:07:17.357Z] [v2] commands registered {"registered":5,"names":["goal","refactor","start-work","stop-continuation","remove-ai-slops"]}
+PASS omo registered exactly the 5 enabled commands
+(other instances of the plugin reload for their own locations; only the 5-command line is this one)
+--- command execution failures in this server ---
+PASS no command execution failures
+--- summary: pass=22 fail=0 ---

@@ -196,14 +196,46 @@ omo 的 transform 单独打不出来；负对照又排除了"opencode 自带 lsp
 那个数字取决于采样瞬间有几个 server 连完。注册的真凭据是宿主的 `mcp connected` 行。
 另外宿主拒绝以 `console.log` 输出的插件日志，探针必须写文件。
 
-### 7.3 可攻破点 B：`ctx.command.transform.add` → 恢复 6 个 slash 命令
+### 7.3 可攻破点 B：`ctx.command.transform.add` → 恢复 slash 命令 —— **已实现并真机验证**
 
 ```ts
 interface CommandDefinition { name; description?; execute(input: {sessionID, prompt, delivery}) }
 ```
-命令的定义带**每调用回调**，因此 `/init-deep`、`/goal`、`/refactor`、`/start-work`、
-`/stop-continuation`、`/handoff` 可以在 V2 重实现（V1 的 `command.execute.before` 是全局拦截，
-语义不完全等价，但 omo 这 6 个命令都是"模板展开 + 注入"，可以 1:1 落成命令定义）。
+命令的定义带**每调用回调**，因此 `/goal`、`/refactor`、`/start-work`、`/stop-continuation`、
+`/handoff`、`/remove-ai-slops`、`/hyperplan`（实际是 7 个，初版矩阵写了 6 个且误把 `init-deep`
+算进来，它其实是 skill）可以在 V2 重实现。V1 的 `command.execute.before` 是全局拦截，语义不完全
+等价，但 omo 这些命令都是"模板展开 + 注入"，可以 1:1 落成命令定义。
+
+**实现**：`src/v2/command-mapping.ts`（`$ARGUMENTS`/`$SESSION_ID`/`$TIMESTAMP` 展开 + V1→V2 定义映射）、
+`src/v2/command-delivery.ts`（`switchAgent` + `ctx.session.prompt`），由
+`src/v2/register-commands.ts` 接入 `ctx.command.transform`。
+
+**真机验证**（独立 XDG 的 `opencode serve` + 本地 dist，走真实会话命令 API
+`POST /api/session/{id}/command`，每条命令一个全新会话；见
+`.omo/evidence/20260923-v2-alignment/live-command-audit.md`，22 断言全过）：
+
+| 断言 | 结果 |
+|---|---|
+| 注册数（禁用 2 个） | `registered:5` |
+| 5 条启用命令 | 全部 HTTP 204 且投递出展开后的模板（`/start-work` 7497 字符、`/refactor` 18831 字符） |
+| `disabled_commands` 与未知命令 | 一律 404 |
+| `/start-work` 选中的 agent | `Atlas - Plan Executor`，且文本含展开后的 session id 与用户参数 |
+| `command execution failed` | 0 |
+
+**过程中挖出三个真缺陷（均已修）**：
+
+1. **命令全部 500**：`client-shim` 有意不给 `tui`，而 `chat-message` 的
+   `notifyWhenModelCacheIsMissing(client.tui)` 会 `tui.showToast(...)` —— 读 `undefined.showToast`
+   是**同步抛错**，绕过调用方的 `.catch()` 并中断整条 hook 链。shim 现在提供（记录日志的）
+   `tui.showToast` no-op。这条缺陷在 V1 时代不存在，属 V2 移植引入。
+2. **`disabled_commands` 里写 `handoff` 会让整个数组被丢弃**：`BuiltinCommandNameSchema` 与
+   `features/builtin-commands/types.ts` 漂移，少了 `handoff`，而 Zod 遇到一个不认识的值会把整个
+   数组换成空默认值——用户配了 `["goal","handoff"]` 结果**什么都没禁用**。已补枚举 + 加漂移测试
+   （`config/schema/commands.test.ts`）+ 重新生成两个 schema 资产。**这是 V1 就有的缺陷。**
+3. **`/start-work` 静默不投递**：命令按 config key 声明 `agent: "atlas"`，但 V2 注册 omo agent 用的是
+   显示名 id（`Atlas - Plan Executor`）；`switchAgent("atlas")` 会被接受，随后 session runner 抛
+   `Session.AgentNotFoundError` 丢掉 prompt，而 API 仍回 204。投递前改用现成的
+   `resolveRegisteredAgentName` 解析，并在未注册时记 warning。
 
 ### 7.4 可攻破点 C：`ctx.skill.transform` → 注册 skill（含 8 个内置 skill set）
 
@@ -232,7 +264,8 @@ interface SkillEditor { list(); get(id); add(skill); update(id, u); remove(id) }
 ### 7.6 修正后的缺口排序
 
 1. ~~**MCP（含 8 个 LSP 工具）**~~ —— **已完成并真机验证**（§7.2）；
-2. **Commands + skill 注册** —— 有 `ctx.command.transform` / `ctx.skill.transform`，可做；
+2. ~~**Commands（7 个 slash 命令）**~~ —— **已完成并真机验证**（§7.3）；`ctx.skill.transform` 的
+   skill 注册仍未做；
 3. ~~`session_*` 四个~~ —— 实测**无数据**（见 §7.5），仍是真缺口；
 4. **`skill` 工具** —— 用 permission 域替代 ask；
 5. **team-mode / monitor** —— 工具本身在拉黑名单，需确认真实依赖。
