@@ -34,6 +34,12 @@ import {
   type V1ChatMessageInput,
   type V1ChatMessageOutput,
 } from "./prompt-hook-mapping"
+import {
+  applyV1ChatParams,
+  toV1ChatParams,
+  type V1ChatParamsInput,
+  type V1ChatParamsOutput,
+} from "./model-request-hook-mapping"
 
 /**
  * V2 hook registration layer.
@@ -217,5 +223,34 @@ export async function registerOmoPromptHook(
       reported.add(field)
       log(`[v2] chat.message cannot carry "${field}" on the V2 prompt`, { sessionID: pair.input.sessionID })
     })
+  })
+}
+
+export type V1ChatParamsHandler = (
+  input: V1ChatParamsInput,
+  output: V1ChatParamsOutput,
+) => Promise<void> | void
+
+/**
+ * Register V1 `chat.params` on the V2 `context` hook. `chat.headers` is intentionally not
+ * bridged: its gate needs the user message `id`/`role`, which `SessionModelRequest` does not
+ * carry, so it would always no-op.
+ */
+export async function registerOmoModelRequestHook(
+  registrar: V2SessionHookRegistrar,
+  handler: V1ChatParamsHandler,
+): Promise<HookRegistration> {
+  let reportedVariantGap = false
+  return registrar("context", async (event) => {
+    const pair = toV1ChatParams(event)
+    if (pair === undefined) return
+    await handler(pair.input, pair.output)
+    applyV1ChatParams(event, pair.output)
+    if (!reportedVariantGap) {
+      reportedVariantGap = true
+      log("[v2] chat.params: input.message.variant has no V2 context equivalent; agent variant is applied at agent registration instead", {
+        sessionID: pair.input.sessionID,
+      })
+    }
   })
 }

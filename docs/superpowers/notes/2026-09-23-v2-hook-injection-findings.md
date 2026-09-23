@@ -183,3 +183,21 @@ Grepping the V1 adapter shows omo never registered either hook:
 Therefore V2's `permission.hook("evaluate")` and `shell.hook("create.before")` are **new
 capabilities, not ports**. Wiring them would mean inventing policy omo never had; they are left
 out of P3 rather than implemented speculatively.
+
+---
+
+## 9. `model.request` is only partially portable
+
+`SessionModelRequest` is `{sessionID, agent, model, kind, baseURL?, headers}` — it carries **no
+message context and no generation options**. That splits the two V1 hooks:
+
+- **`chat.params`** wrote generation settings. Those are bridged onto `session.hook("context")`
+  instead, because `SessionContext` does carry `options`; `temperature` / `topP` / `topK` /
+  `maxOutputTokens` are lifted onto `options` alongside `output.options`.
+  Its `input.message.variant` half has no V2 context equivalent — omo's `applyAgentVariant` reads
+  it — so the registration logs that gap once instead of dropping it silently. (In V2 the
+  variant dimension is expressed at **agent registration**, which P1 already maps.)
+- **`chat.headers`** is deliberately **not** bridged: `isOmoInternalMessage` requires
+  `message.role === "user"` **and** `message.id`
+  (`plugin/chat-headers.ts:108-118`), and `SessionModelRequest` provides neither, so the handler
+  would always return without writing `x-initiator`. Registering it would be a silent no-op.

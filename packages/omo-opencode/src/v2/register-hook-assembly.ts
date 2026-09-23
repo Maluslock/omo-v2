@@ -11,6 +11,7 @@ import { startV2EventSubscription } from "./event-subscription"
 import {
   registerOmoCompactionHook,
   registerOmoMessagesHook,
+  registerOmoModelRequestHook,
   registerOmoPromptHook,
   registerOmoSystemHook,
   registerOmoToolHooks,
@@ -91,6 +92,10 @@ async function registerSessionHooks(
   const system = handlers["experimental.chat.system.transform"]
   if (typeof system === "function") {
     registrations.push(await registerOmoSystemHook(registrar, system as never))
+  }
+  const chatParams = handlers["chat.params"]
+  if (typeof chatParams === "function") {
+    registrations.push(await registerOmoModelRequestHook(registrar, chatParams as never))
   }
   registrations.push(await registerOmoCompactionHook(registrar, compaction as never))
   for (const registration of registrations) disposals.push(() => registration.dispose())
