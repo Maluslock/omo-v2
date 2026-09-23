@@ -1,0 +1,134 @@
+// packages/omo-opencode/src/v2/register-hook-assembly.test.ts
+import { beforeEach, describe, expect, it } from "bun:test"
+import { registerOmoHooks, resetOmoHookCache } from "./register-hook-assembly"
+
+type Calls = {
+  subscribe: number
+  toolHooks: string[]
+  sessionHooks: string[]
+  disposedRegistrations: string[]
+  headers: number
+  createdPluginInterfaces: number
+  windows: number
+}
+
+function createFixture() {
+  const calls: Calls = {
+    subscribe: 0,
+    toolHooks: [],
+    sessionHooks: [],
+    disposedRegistrations: [],
+    headers: 0,
+    createdPluginInterfaces: 0,
+    windows: 0,
+  }
+
+  const runtime = {
+    managers: {
+      backgroundManager: {},
+      modelFallbackControllerAccessor: {},
+      tmuxSessionManager: {},
+      skillMcpManager: {},
+      configHandler: {},
+    },
+    toolsResult: { filteredTools: {}, mergedSkills: [], availableSkills: [] },
+    client: {},
+  }
+
+  const deps = {
+    resolveRuntime: (async () => runtime) as never,
+    createHooks: (() => ({ disposeHooks: () => { calls.headers += 1 } })) as never,
+    createPluginInterface: (() => {
+      calls.createdPluginInterfaces += 1
+      return {
+        event: async () => {},
+        "tool.execute.before": async () => {},
+        "tool.execute.after": async () => {},
+        "experimental.chat.messages.transform": async () => {},
+        "experimental.chat.system.transform": async () => {},
+      }
+    }) as never,
+    createSessionCompactingHandler: (() => async () => {}) as never,
+    createFirstMessageVariantGate: (() => ({ markSessionCreated: () => {}, clear: () => {} })) as never,
+    createModelCacheState: (() => ({})) as never,
+  }
+
+  const makeCtx = (directory: string) => ({
+    location: { directory },
+    event: {
+      subscribe: (options?: { signal?: AbortSignal }) => {
+        calls.subscribe += 1
+        return (async function* () {
+          await new Promise<void>((resolve) => {
+            if (options?.signal?.aborted) return resolve()
+            options?.signal?.addEventListener("abort", () => resolve(), { once: true })
+          })
+        })() as AsyncIterable<unknown>
+      },
+    },
+    tool: {
+      hook: async (name: string) => {
+        calls.toolHooks.push(name)
+        return { dispose: async () => { calls.disposedRegistrations.push(`tool:${name}`) } }
+      },
+    },
+    session: {
+      hook: async (name: string) => {
+        calls.sessionHooks.push(name)
+        return { dispose: async () => { calls.disposedRegistrations.push(`session:${name}`) } }
+      },
+    },
+  })
+
+  return { calls, deps, makeCtx }
+}
+
+beforeEach(() => {
+  resetOmoHookCache()
+})
+
+describe("registerOmoHooks", () => {
+  it("registers the event stream, both tool hooks and the three session hooks", async () => {
+    const { calls, deps, makeCtx } = createFixture()
+    await registerOmoHooks(makeCtx("/work") as never, {} as never, deps)
+
+    expect(calls.subscribe).toBe(1)
+    expect(calls.toolHooks).toEqual(["execute.before", "execute.after"])
+    expect(calls.sessionHooks).toEqual(["context", "context", "compaction"])
+    expect(calls.createdPluginInterfaces).toBe(1)
+  })
+
+  it("is idempotent for the same context", async () => {
+    const { calls, deps, makeCtx } = createFixture()
+    const ctx = makeCtx("/work")
+    await registerOmoHooks(ctx as never, {} as never, deps)
+    await registerOmoHooks(ctx as never, {} as never, deps)
+
+    expect(calls.subscribe).toBe(1)
+    expect(calls.toolHooks).toHaveLength(2)
+    expect(calls.sessionHooks).toHaveLength(3)
+    expect(calls.createdPluginInterfaces).toBe(1)
+  })
+
+  it("disposes the previous registrations and hooks when the context changes", async () => {
+    const { calls, deps, makeCtx } = createFixture()
+    await registerOmoHooks(makeCtx("/work") as never, {} as never, deps)
+    await registerOmoHooks(makeCtx("/work") as never, {} as never, deps)
+
+    expect(calls.headers).toBe(1)
+    expect(calls.disposedRegistrations).toEqual([
+      "tool:execute.before",
+      "tool:execute.after",
+      "session:context",
+      "session:context",
+      "session:compaction",
+    ])
+  })
+
+  it("skips registration when no V2 hook domain exists", async () => {
+    const { calls, deps } = createFixture()
+    await registerOmoHooks({ location: { directory: "/work" } } as never, {} as never, deps)
+    expect(calls.subscribe).toBe(0)
+    expect(calls.createdPluginInterfaces).toBe(0)
+  })
+})

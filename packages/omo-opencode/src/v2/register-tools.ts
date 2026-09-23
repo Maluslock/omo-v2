@@ -103,6 +103,7 @@ type OmoToolsResult = Awaited<ReturnType<typeof createTools>>
 type CachedRuntime = {
   managers: ReturnType<typeof createManagers>
   toolsResult: OmoToolsResult
+  client: unknown
   cleanupTargets: Set<LifecycleTarget>
 }
 
@@ -110,6 +111,8 @@ type CachedRuntime = {
 export type OmoRuntime = {
   managers: ReturnType<typeof createManagers>
   toolsResult: OmoToolsResult
+  /** The V1 client shim this runtime was built with (shared with the hook assembly). */
+  client: unknown
 }
 
 const runtimeCache = new Map<string, CachedRuntime>()
@@ -218,9 +221,14 @@ async function loadOmoRuntime(
     pluginConfig,
     managers,
   })
-  const entry: CachedRuntime = { managers, toolsResult, cleanupTargets }
+  const entry: CachedRuntime = { managers, toolsResult, client, cleanupTargets }
   runtimeCache.set(key, entry)
   return entry
+}
+
+/** Cache key for one `(directory, context identity, config)` triple. */
+export function omoRuntimeKeyFor(ctx: V2Ctx, pluginConfig: OhMyOpenCodeConfig): string {
+  return managersCacheKey(ctx.location.directory, pluginConfig, contextGeneration(ctx))
 }
 
 /** Resolve the runtime for a V2 context, creating the client shim and generation key. */

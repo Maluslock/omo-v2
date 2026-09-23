@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin"
 import { loadPluginConfig } from "../plugin-config"
 import { log } from "../shared"
 import { registerOmoAgents } from "./register-agents"
+import { registerOmoHooks } from "./register-hook-assembly"
 import { registerOmoTools } from "./register-tools"
 
 export type V2PluginDefinition = ReturnType<typeof Plugin.define>
@@ -22,6 +23,7 @@ export function createV2Plugin(): V2PluginDefinition {
         const pluginConfig = loadPluginConfig(ctx.location.directory, ctx)
         await registerOmoAgents(ctx, pluginConfig)
         await registerOmoTools(ctx, pluginConfig)
+        await registerOmoHooks(ctx, pluginConfig)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         log("[v2] registration skipped", { error: message })
