@@ -21,7 +21,10 @@ import { toV1Message, type V1ShimMessage } from "./client-shim-messages"
  *   maps `agent`/`model` onto `switchAgent`/`switchModel` and warns once about the rest.
  * - `session.status`, `session.todo` have no V2 domain equivalent and are honest empty stubs.
  * - `config.get` is an empty stub (V2 has no `config` domain); host-skill resolution falls back.
- * - `tui` is intentionally absent; V2 TUI toasts are a separate plugin surface (P5).
+ * - `tui.showToast` is a logged no-op: V2 exposes no TUI domain to plugins. It must still EXIST,
+ *   because `client.tui.showToast(...)` throws while reading `.showToast` off `undefined`, and that
+ *   synchronous throw escapes the caller's `.catch()` (observed as a 500 on the session command
+ *   route). See `docs/superpowers/notes/2026-09-23-v2-hook-injection-findings.md`.
  */
 
 type Json = Record<string, unknown>
@@ -61,6 +64,7 @@ export type V1ShimClient = {
   app: { agents: () => Promise<V1ShimResponse<Json[]>> }
   model: { list: () => Promise<V1ShimResponse<Json[]>> }
   config: { get: () => Promise<V1ShimResponse<Json>> }
+  tui: { showToast: (input: { body?: Json }) => Promise<V1ShimResponse<boolean>> }
 }
 
 const warned = new Set<string>()
@@ -315,5 +319,20 @@ export function createV1ClientShim(source: V2ClientShimSource): Json {
     // V2 has no `config` domain. `readRuntimeHostSkills` reads `data.skills` and falls back to
     // the on-disk skill set when it is absent.
     config: { get: async (): Promise<V1ShimResponse<Json>> => ({ data: {} }) },
+    // V1 hooks toast through `client.tui` (9 call sites). V2 exposes no TUI domain to plugins, so
+    // toasts are dropped after one log line per title. The property must be present: reading
+    // `.showToast` off `undefined` throws synchronously, before the caller's `.catch()` can see it,
+    // and that aborts the surrounding hook chain.
+    tui: {
+      showToast: async (input: { body?: Json }): Promise<V1ShimResponse<boolean>> => {
+        const body = isRecord(input?.body) ? input.body : {}
+        const title = typeof body.title === "string" ? body.title : "toast"
+        warnOnce(
+          `tui.showToast.${title}`,
+          `[v2][client-shim] tui.showToast is a no-op on V2 because the plugin API exposes no TUI domain: ${title}`,
+        )
+        return { data: true }
+      },
+    },
   }
 }

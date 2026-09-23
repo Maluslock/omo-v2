@@ -354,10 +354,14 @@ describe("createV1ClientShim adapter surfaces", () => {
     expect(await client.config.get()).toEqual({ data: {} })
   })
 
-  it("does not advertise a TUI surface (P5 owns V2 toasts)", () => {
+  it("exposes a tui.showToast no-op so V1 toast call sites cannot crash the hook chain", async () => {
+    // given a shim with no V2 TUI domain
     const { source } = createSource()
     const client = createV1ClientShim(source)
-    expect(Object.prototype.hasOwnProperty.call(client, "tui")).toBe(false)
+
+    // when / then the call resolves instead of throwing on an undefined property read
+    expect(await client.tui.showToast({ body: { title: "Provider Cache Missing" } })).toEqual({ data: true })
+    expect(await client.tui.showToast({})).toEqual({ data: true })
   })
 
   it("degrades agent/model list failures to empty data", async () => {
