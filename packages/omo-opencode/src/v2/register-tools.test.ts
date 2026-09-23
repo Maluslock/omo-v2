@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { z } from "zod"
 import {
   CLIENT_DEPENDENT_TOOLS,
+  SHIM_UNLOCKED_TOOLS,
   registerOmoTools,
   resetOmoManagersCache,
 } from "./register-tools"
@@ -54,6 +55,11 @@ type MockEditor = ReturnType<typeof createMockEditor>
 function createMockCtx(directory: string, editor: MockEditor) {
   return {
     location: { directory },
+    // The shim builder inspects `ctx.session`; a real V2 context always has it. `prompt` presence
+    // is read at build time (the gate feature-detects it), so the mock exposes it.
+    session: { prompt: async () => ({}) },
+    agent: { list: async () => ({ location: { directory }, data: [] }) },
+    model: { list: async () => ({ location: { directory }, data: [] }) },
     tool: {
       transform: async (callback: (editor: MockEditor) => void) => {
         const returned = callback(editor)
@@ -150,34 +156,61 @@ describe("registerOmoTools", () => {
     expect(editor.registry.size).toBe(2)
   })
 
-  it("does not pass client-dependent tools to editor.add", async () => {
+  it("registers shim-unlocked tools and keeps unmappable client-dependent tools out", async () => {
     const editor = createMockEditor()
     const { deps } = createFakeDeps({
       glob: fakeTool("glob"),
       edit: fakeTool("edit"),
       task: fakeTool("task"),
       call_omo_agent: fakeTool("call_omo_agent"),
+      look_at: fakeTool("look_at"),
+      background_output: fakeTool("background_output"),
+      background_cancel: fakeTool("background_cancel"),
+      skill_mcp: fakeTool("skill_mcp"),
       session_list: fakeTool("session_list"),
+      skill: fakeTool("skill"),
+      team_list: fakeTool("team_list"),
     })
 
     await registerOmoTools(createMockCtx(directory, editor), {} as never, deps)
 
-    expect(editor.addCalls).toEqual(["omo_glob", "omo_edit"])
-    for (const name of ["task", "call_omo_agent", "session_list"]) {
+    expect(editor.addCalls).toEqual([
+      "omo_glob",
+      "omo_edit",
+      "omo_task",
+      "omo_call_omo_agent",
+      "omo_look_at",
+      "omo_background_output",
+      "omo_background_cancel",
+      "omo_skill_mcp",
+    ])
+    for (const name of SHIM_UNLOCKED_TOOLS) {
+      expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(false)
+      expect(editor.get(`omo_${name}`)).toBeDefined()
+    }
+    for (const name of ["session_list", "skill", "team_list"]) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(true)
       expect(editor.get(`omo_${name}`)).toBeUndefined()
       expect(editor.addCalls).not.toContain(`omo_${name}`)
     }
   })
 
-  it("passes no client into createManagers (never fabricates one)", async () => {
+  it("passes the V1 client shim into createManagers and createTools", async () => {
     const editor = createMockEditor()
     const { deps, getLastCtx } = createFakeDeps({ glob: fakeTool("glob") })
+    let toolsCtx: { directory?: string; client?: { session?: Record<string, unknown> } } | undefined
+    deps.createTools = (async (args: { ctx: typeof toolsCtx }) => {
+      toolsCtx = args.ctx
+      return { filteredTools: { glob: fakeTool("glob") } }
+    }) as never
 
     await registerOmoTools(createMockCtx(directory, editor), {} as never, deps)
 
-    expect(getLastCtx()).toEqual({ directory })
-    expect((getLastCtx() as { client?: unknown }).client).toBeUndefined()
+    for (const ctx of [getLastCtx() as { directory?: string; client?: { session?: Record<string, unknown> } }, toolsCtx]) {
+      expect(ctx?.directory).toBe(directory)
+      expect(typeof ctx?.client?.session?.get).toBe("function")
+      expect(typeof ctx?.client?.session?.promptAsync).toBe("function")
+    }
   })
 
   it("memoizes createManagers per directory across calls", async () => {

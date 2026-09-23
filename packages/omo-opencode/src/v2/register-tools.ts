@@ -7,6 +7,7 @@ import { createTools } from "../create-tools"
 import { registerManagerForCleanup, unregisterManagerForCleanup } from "../features/background-agent/process-cleanup"
 import { createModelCacheState } from "../plugin-state"
 import { log } from "../shared"
+import { createV1ClientShim, type V2ClientShimSource } from "./client-shim"
 import { ArgSchemaProvenanceError, toV2Tool } from "./tool-mapping"
 
 type V2Ctx = Parameters<NonNullable<Parameters<typeof Plugin.define>[0]["setup"]>>[0]
@@ -14,34 +15,22 @@ type V2Ctx = Parameters<NonNullable<Parameters<typeof Plugin.define>[0]["setup"]
 const NAMESPACE = "omo"
 
 /**
- * Tools that dereference the V1 plugin `client` at execute time. V2 exposes no `client`
- * on its plugin `Context`, so these cannot work here: advertising them would surface a
- * tool that throws/degrades on every call. They are omitted from the V2 tool registry.
+ * Tools that dereference the V1 plugin `client` and have **no usable V2 mapping**, so they stay
+ * out of the V2 registry (advertising them would surface a tool that throws or degrades on every
+ * call). Everything the shim can serve (`call_omo_agent`, `look_at`, `task`, `background_output`,
+ * `background_cancel`, `skill_mcp`) is registered instead — see `createV1ClientShim`.
  *
- * Derived from grepping client usage in the V1 tool factories:
- * - `call_omo_agent` — `resolveCallableAgents(ctx.client)`, completion poller.
- * - `look_at` — `session-poller` reads `client.session.status/messages/abort`.
- * - `task` (delegate-task) — `options.client` for parent context/config/model list.
- * - `background_output` — `client.session.messages` for task output.
- * - `background_cancel` — grouped with `background_*` (its own client use is unused; kept
- *   out for consistency so no background surface is advertised without a client).
- * - `session_*` — `setStorageClient(ctx.client)` plus SDK session reads.
- * - `task_create`/`task_update` — `todo-sync` reads `ctx.client.session.todo`.
- * - `skill`/`skill_mcp` — host skill resolution (`readRuntimeHostSkills(ctx.client)`,
- *   native-skills client) and the fail-closed `ctx.ask` permission path.
- * - `monitor_*` — monitor manager is constructed from the client.
- * - `team_*` — every team tool factory receives `ctx.client`.
+ * Still excluded:
+ * - `session_*` — `setStorageClient` plus SDK session reads that need `session.list`/`session.todo`,
+ *   which V2 does not expose to plugins (`ctx.session` is a `Pick` of `SessionApi`).
+ * - `task_create`/`task_update` — `todo-sync` reads `ctx.client.session.todo`; V2 removed todos.
+ * - `skill` — blocked by the V2 ToolContext `ask` gap (fail-closed), independent of the client.
+ * - `monitor_*` — the monitor manager is constructed around a client surface V2 lacks.
+ * - `team_*` — every team tool factory receives `ctx.client` and drives tmux/worktree orchestration.
  *
- * Client-free tools (`grep`, `glob`, `edit`, `interactive_bash`, goal tools) stay
- * registered: grep/glob only need `directory`, hashline `edit` guards `pluginCtx?.client`,
- * and the goal tools are pure filesystem state.
+ * Client-free tools (`grep`, `glob`, `edit`, `interactive_bash`, goal tools) stay registered.
  */
 export const CLIENT_DEPENDENT_TOOLS: ReadonlySet<string> = new Set([
-  "call_omo_agent",
-  "look_at",
-  "task",
-  "background_output",
-  "background_cancel",
   "session_list",
   "session_read",
   "session_search",
@@ -49,7 +38,6 @@ export const CLIENT_DEPENDENT_TOOLS: ReadonlySet<string> = new Set([
   "task_create",
   "task_update",
   "skill",
-  "skill_mcp",
   "monitor_start",
   "monitor_stop",
   "monitor_list",
@@ -66,6 +54,19 @@ export const CLIENT_DEPENDENT_TOOLS: ReadonlySet<string> = new Set([
   "team_task_get",
   "team_status",
   "team_list",
+])
+
+/**
+ * Tools unlocked by the V1 client shim: registered in V2, but still dependent on the shim at
+ * execute time. Kept as an explicit set so the registration tests can pin the unlocked surface.
+ */
+export const SHIM_UNLOCKED_TOOLS: ReadonlySet<string> = new Set([
+  "call_omo_agent",
+  "look_at",
+  "task",
+  "background_output",
+  "background_cancel",
+  "skill_mcp",
 ])
 
 type RegisterToolsDeps = {
@@ -104,8 +105,26 @@ type CachedManagers = {
 
 const managersCache = new Map<string, CachedManagers>()
 
-function managersCacheKey(directory: string, pluginConfig: OhMyOpenCodeConfig): string {
-  return `${directory}\u0000${stableStringify(pluginConfig)}`
+/**
+ * `createManagers` captures the plugin context's `client`, so a manager set built for one
+ * `setup(ctx)` must not be reused for a later one: on reload the previous client belongs to a
+ * disposed plugin registration. The generation is keyed by context identity, which keeps the
+ * memoization working for repeated calls with the same context (idempotent reloads, tests) while
+ * forcing a dispose+rebuild when a new context appears.
+ */
+const contextGenerations = new Map<object, number>()
+let contextGenerationCounter = 0
+
+function contextGeneration(ctx: object): number {
+  const existing = contextGenerations.get(ctx)
+  if (existing !== undefined) return existing
+  const next = ++contextGenerationCounter
+  contextGenerations.set(ctx, next)
+  return next
+}
+
+function managersCacheKey(directory: string, pluginConfig: OhMyOpenCodeConfig, generation: number): string {
+  return `${directory}\u0000${generation}\u0000${stableStringify(pluginConfig)}`
 }
 
 /**
@@ -149,9 +168,11 @@ async function disposeManagers(entry: CachedManagers): Promise<void> {
 async function getManagers(
   directory: string,
   pluginConfig: OhMyOpenCodeConfig,
+  client: unknown,
+  generation: number,
   deps: RegisterToolsDeps,
 ): Promise<ReturnType<typeof createManagers>> {
-  const key = managersCacheKey(directory, pluginConfig)
+  const key = managersCacheKey(directory, pluginConfig, generation)
   const cached = managersCache.get(key)
   if (cached !== undefined) return cached.managers
 
@@ -165,7 +186,7 @@ async function getManagers(
 
   const cleanupTargets = new Set<LifecycleTarget>()
   const created = deps.createManagers({
-    ctx: { directory } as never,
+    ctx: { directory, client } as never,
     pluginConfig,
     tmuxConfig: createRuntimeTmuxConfig(pluginConfig),
     modelCacheState: createModelCacheState(),
@@ -184,16 +205,17 @@ async function getManagers(
 /** Test seam: clears the memoized managers (production never calls this). */
 export function resetOmoManagersCache(): void {
   managersCache.clear()
+  contextGenerations.clear()
+  contextGenerationCounter = 0
 }
 
 /**
  * Register omo's V1 tool registry into the V2 tool domain.
  *
  * Probed facts this relies on:
- * - V2 `Context` has **no `client`**. `createManagers`/`createTools` construct successfully
- *   with a minimal `{ directory }` and `ctx.client === undefined`; the client is only
- *   dereferenced at execute time, so it is passed through as `undefined` rather than
- *   fabricating a V1 client. Tools that need it are skipped — see `CLIENT_DEPENDENT_TOOLS`.
+ * - V2 `Context` has no `client`; `createV1ClientShim(ctx)` rebuilds the V1 surface the tool
+ *   factories and managers dereference at execute time. Tools whose client usage has no V2
+ *   mapping stay out — see `CLIENT_DEPENDENT_TOOLS` / `SHIM_UNLOCKED_TOOLS`.
  * - Effective V2 tool id = `${options.namespace}_${name}` (namespace separator `_`), as
  *   returned by `ctx.tool.list()` and accepted by `editor.get`. Built-ins such as
  *   `glob`/`grep`/`skill` are never shadowed because every omo tool is namespaced.
@@ -215,9 +237,14 @@ export async function registerOmoTools(
 
   const directory = ctx.location.directory
   const resolvedDeps: RegisterToolsDeps = { ...defaultDeps, ...deps }
-  const managers = await getManagers(directory, pluginConfig, resolvedDeps)
+  // The V2 domain methods use branded ids and optional-input signatures that TypeScript's
+  // contravariant parameter checking rejects against the structural shim type; the runtime shape
+  // is pinned by `client-shim.test.ts` and the P2.5 probe, so bridge the declarations here.
+  const client = createV1ClientShim(ctx as unknown as V2ClientShimSource)
+  const generation = contextGeneration(ctx)
+  const managers = await getManagers(directory, pluginConfig, client, generation, resolvedDeps)
   const { filteredTools } = await resolvedDeps.createTools({
-    ctx: { directory } as never,
+    ctx: { directory, client } as never,
     pluginConfig,
     managers,
   })

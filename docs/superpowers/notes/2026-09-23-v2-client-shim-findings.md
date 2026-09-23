@@ -179,3 +179,67 @@ client input is optional (`delivery?: "steer" | "queue" | null`,
 - Escape hatch (out of scope): a plugin can construct its own `@opencode/client` and call the
   local HTTP API for missing methods, but self-calls during plugin load deadlock (the
   `runtime-skill-resolver` doc records this); only safe at tool-execute time and fragile.
+
+---
+
+## 8. P2.6 implementation outcome + corrections (2026-09-23)
+
+The shim is implemented: `packages/omo-opencode/src/v2/client-shim.ts` (client surface) +
+`client-shim-messages.ts` (V2 `SessionMessage.Info` → V1 `{info,parts}`), wired into
+`register-tools.ts` with unit tests. This section corrects the spike's optimistic estimate and
+records what real-machine probing proved.
+
+### 8.1 Corrections to §5 (unlock estimate)
+
+- **`parentID` is not supported.** `POST /api/session` (the route both `ctx.session.create` and
+  the V1 shim map onto) does not accept `parentID`; a live probe sent it, got HTTP 200, and the
+  created session had **no `parentID`**. So `task` / `call_omo_agent` / `look_at` create
+  subagent sessions that are **not linked to their parent**. They still return output via message
+  polling, but they are degraded, not equivalent.
+- **`session.prompt` cannot carry the V1 body.** The V2 payload is
+  `{id?, text, files, agents, skills, metadata, delivery, resume?}` — no `agent`, `model`,
+  `system`, `tools`, or generation params. The shim maps `agent`/`model` onto `switchAgent` /
+  `switchModel` first; `system`, `tools`, `temperature`, `topP`, `maxOutputTokens`, `options` are
+  dropped with a one-time warning. `task`'s tool restrictions and system injection are therefore
+  **not reproduced** in V2.
+- **`session.messages` is now backed by `session.context`**, which returns only the active context
+  (messages after the last compaction), not the full V1 transcript. Subagent-output reads are
+  unaffected; full-history reads would be.
+- **`session.status` / `session.todo` are honest empty stubs** (`{data:{}}` / `{data:[]}`), not
+  derivations. Background polling falls back to message-count stability; the todo check is a
+  no-op.
+- **`tui` is not provided** (P5 owns V2 toasts); `config.get` returns `{data:{}}` so host-skill
+  resolution falls back to the on-disk skill set.
+
+### 8.2 What is actually unlocked (registration layer)
+
+`registerOmoTools` now registers `omo_task`, `omo_call_omo_agent`, `omo_look_at`,
+`omo_background_output`, `omo_background_cancel`, `omo_skill_mcp` alongside the client-free
+tools. Still excluded: `session_*` (need `session.list`/`todo`), `task_create`/`task_update`
+(todo sync), `skill` (the V2 ToolContext `ask` gap, independent of the client), `monitor_*`,
+`team_*`.
+
+### 8.3 QA limitation (must read before claiming equivalence)
+
+In the current sandbox the plugin-injection path cannot be driven: `opencode serve` boots the API
+server but does **not** run V2 plugin discovery (`/api/plugin` stays `[]`; no `setup(ctx)`), and
+the CLI-client path is unavailable (background service will not start, TUI hangs at
+"Starting background server...", `--standalone` is rejected by the parser). Details and raw
+artifacts: `.omo/evidence/20260923-v2-client-shim/plugin-discovery-blocker.md`.
+
+Therefore the shim's evidence is:
+
+1. Unit tests pinning every mapping and stub (`.omo/evidence/20260923-v2-client-shim/`).
+2. Real V2 HTTP shapes for `Session.Info`, `create` with/without `parentID`, the user message,
+   and an **import round-trip** producing a real assistant+tool message whose captured payload is
+   embedded verbatim as a test fixture.
+
+Still outstanding: end-to-end evidence that plugin injection + tool dispatch work on a real V2
+load. That requires an environment where the V2 client/background-service path starts.
+
+### 8.4 Delivery mapping (now implemented, still inferred)
+
+`promptAsync` → `delivery:"queue"`; synchronous `prompt` → `delivery:"steer"`. The gate waits for
+session idle before the synchronous path, so there is normally no running turn to steer. This
+choice is implemented but still **not runtime-verified** against a live model.
+
