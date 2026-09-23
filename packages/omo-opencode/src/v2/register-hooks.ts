@@ -10,6 +10,12 @@ import {
   type V1ToolBeforeInput,
   type V1ToolBeforeOutput,
 } from "./tool-hook-mapping"
+import {
+  applyV1System,
+  toV1System,
+  type V1SystemInput,
+  type V1SystemOutput,
+} from "./system-hook-mapping"
 
 /**
  * V2 hook registration layer.
@@ -87,4 +93,33 @@ export async function registerOmoToolHooks(
   }
 
   return registrations
+}
+
+export type V2SessionHookName = "context" | "compaction" | "model.request" | "prompt"
+
+export type V2SessionHookRegistrar = (
+  name: V2SessionHookName,
+  callback: (event: unknown) => Promise<void>,
+) => Promise<HookRegistration>
+
+export type V1SystemTransformHandler = (
+  input: V1SystemInput,
+  output: V1SystemOutput,
+) => Promise<void> | void
+
+/**
+ * Register V1 `experimental.chat.system.transform` on the V2 `context` hook. Only the `system`
+ * field is bridged here; request `messages` need their own converter (Task 4c) because
+ * `toolPairValidator` inserts synthetic tool-result parts and is shape-sensitive.
+ */
+export async function registerOmoSystemHook(
+  registrar: V2SessionHookRegistrar,
+  handler: V1SystemTransformHandler,
+): Promise<HookRegistration> {
+  return registrar("context", async (event) => {
+    const pair = toV1System(event)
+    if (pair === undefined) return
+    await handler(pair.input, pair.output)
+    applyV1System(event, pair.output)
+  })
 }

@@ -1,7 +1,7 @@
 // packages/omo-opencode/src/v2/register-hooks.test.ts
 import { describe, expect, it } from "bun:test"
-import { registerOmoToolHooks } from "./register-hooks"
-import type { HookRegistration, V2ToolHookRegistrar } from "./register-hooks"
+import { registerOmoSystemHook, registerOmoToolHooks } from "./register-hooks"
+import type { HookRegistration, V2SessionHookRegistrar, V2ToolHookRegistrar } from "./register-hooks"
 import type { V1ToolAfterInput, V1ToolAfterOutput, V1ToolBeforeInput, V1ToolBeforeOutput } from "./tool-hook-mapping"
 
 function createRegistrar() {
@@ -134,5 +134,68 @@ describe("registerOmoToolHooks", () => {
     expect(registrations).toHaveLength(2)
     for (const registration of registrations) await registration.dispose()
     expect(disposed).toEqual(["execute.before", "execute.after"])
+  })
+})
+
+function createSessionRegistrar() {
+  const callbacks = new Map<string, (event: unknown) => Promise<void>>()
+  const registrar: V2SessionHookRegistrar = async (name, callback) => {
+    if (callbacks.has(name)) throw new Error(`duplicate registration: ${name}`)
+    callbacks.set(name, callback)
+    return { dispose: async () => { callbacks.delete(name) } }
+  }
+  return {
+    registrar,
+    invoke: (name: string, event: unknown) => {
+      const callback = callbacks.get(name)
+      if (callback === undefined) throw new Error(`not registered: ${name}`)
+      return callback(event)
+    },
+  }
+}
+
+describe("registerOmoSystemHook", () => {
+  it("runs the V1 system transform on the V2 context hook and writes changes back", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    const seen: Array<{ sessionID?: string; model: { id: string; providerID: string } }> = []
+    await registerOmoSystemHook(registrar, (input, output) => {
+      seen.push(input)
+      output.system.push("<ultrawork-mode>on</ultrawork-mode>")
+    })
+
+    const event: Record<string, unknown> = {
+      sessionID: "ses_1",
+      model: { id: "sonnet", providerID: "anthropic" },
+      system: [{ type: "text", text: "base" }],
+    }
+    await invoke("context", event)
+
+    expect(seen).toEqual([{ sessionID: "ses_1", model: { id: "sonnet", providerID: "anthropic" } }])
+    expect(event.system).toEqual([
+      { type: "text", text: "base" },
+      { type: "text", text: "<ultrawork-mode>on</ultrawork-mode>" },
+    ])
+  })
+
+  it("leaves system untouched when the V1 handler makes no change", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    await registerOmoSystemHook(registrar, () => {})
+
+    const original = [{ type: "text", text: "base", cache: { type: "ephemeral" } }]
+    const event: Record<string, unknown> = {
+      sessionID: "ses_1",
+      model: { id: "sonnet", providerID: "anthropic" },
+      system: structuredClone(original),
+    }
+    await invoke("context", event)
+    expect(event.system).toEqual(original)
+  })
+
+  it("skips malformed context events without invoking the handler", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    let called = 0
+    await registerOmoSystemHook(registrar, () => { called += 1 })
+    await invoke("context", { sessionID: "ses_1" })
+    expect(called).toBe(0)
   })
 })
