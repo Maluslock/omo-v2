@@ -1,0 +1,15 @@
+### user global config: ~/.config/opencode/opencode.json
+{
+  "plugin": null
+}
+
+### published package export shape (grep of dist/index.js)
+pkg=/home/user/.cache/opencode/npm/oh-my-openagent@latest/1789976578335/node_modules/oh-my-openagent
+      1 id: "oh-my-openagent"
+      6 server:
+
+### host log sample (1 of 502 identical failures)
+timestamp=2026-09-23T06:49:02.639Z level=WARN run=96203b6f message="failed to load plugin" target=oh-my-openagent@latest ref=err_5d79ff83 cause="Cause([Fail(PluginModule.LoadError: Plugin must export a default definition with an id and an effect or setup function. (cause: SchemaError(Missing key\n  at [\"default\"][\"effect\"]\nMissing key\n  at [\"default\"][\"setup\"])))])" http.span=475 role=server
+
+### failure count in host log
+oh-my-openagent@latest load failures = 506

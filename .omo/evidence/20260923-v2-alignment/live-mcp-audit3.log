@@ -1,0 +1,115 @@
+### omo plugin log: [v2] mcps registered (ocaudit7 = lsp enabled, ocaudit8 = disabled_mcps:[lsp])
+[2026-09-23T06:46:28.169Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.132Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.087Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:27.972Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.546Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.387Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.320Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.198Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.508Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.447Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.238Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.579Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:29.201Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:48.649Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:47:45.656Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:49:03.401Z] [v2] mcps registered {"registered":4,"names":["websearch","context7","grep_app","codegraph"]}
+[2026-09-23T06:49:22.599Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:49:22.601Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:49:22.601Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:49:22.601Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+
+### host log: mcp connections for the two probe directories
+2026-09-23T06:47:46.201Z dir=/home/user/ocaudit7 server=lsp tools=8
+2026-09-23T06:47:46.926Z dir=/home/user/ocaudit7 server=codegraph tools=0
+2026-09-23T06:47:47.536Z dir=/home/user/ocaudit7 server=websearch tools=1
+2026-09-23T06:47:48.224Z dir=/home/user/ocaudit7 server=grep_app tools=1
+2026-09-23T06:47:48.607Z dir=/home/user/ocaudit7 server=office-word tools=54
+2026-09-23T06:47:49.252Z dir=/home/user/ocaudit7 server=context7 tools=2
+2026-09-23T06:47:51.855Z dir=/home/user/ocaudit7 server=litellm-mcp tools=24
+2026-09-23T06:47:52.338Z dir=/home/user/ocaudit7 server=dida365 tools=55
+2026-09-23T06:47:53.083Z dir=/home/user/ocaudit7 server=postgres tools=9
+2026-09-23T06:47:54.608Z dir=/home/user/ocaudit7 server=drawio tools=7
+2026-09-23T06:47:54.706Z dir=/home/user/ocaudit7 server=sequential-thinking tools=1
+2026-09-23T06:47:54.746Z dir=/home/user/ocaudit7 server=mysql tools=5
+2026-09-23T06:47:55.016Z dir=/home/user/ocaudit7 server=visual-primitives tools=6
+2026-09-23T06:47:56.274Z dir=/home/user/ocaudit7 server=docker tools=1
+2026-09-23T06:47:56.292Z dir=/home/user/ocaudit7 server=excel tools=6
+2026-09-23T06:47:56.325Z dir=/home/user/ocaudit7 server=pdf_reader tools=9
+2026-09-23T06:47:56.339Z dir=/home/user/ocaudit7 server=playwright tools=25
+2026-09-23T06:47:56.353Z dir=/home/user/ocaudit7 server=ssh tools=14
+2026-09-23T06:49:04.511Z dir=/home/user/ocaudit8 server=codegraph tools=0
+2026-09-23T06:49:06.211Z dir=/home/user/ocaudit8 server=office-word tools=54
+2026-09-23T06:49:06.536Z dir=/home/user/ocaudit8 server=grep_app tools=1
+2026-09-23T06:49:06.825Z dir=/home/user/ocaudit8 server=litellm-mcp tools=24
+2026-09-23T06:49:07.814Z dir=/home/user/ocaudit8 server=postgres tools=9
+2026-09-23T06:49:09.763Z dir=/home/user/ocaudit8 server=websearch tools=1
+2026-09-23T06:49:10.395Z dir=/home/user/ocaudit8 server=docker tools=1
+2026-09-23T06:49:10.484Z dir=/home/user/ocaudit8 server=drawio tools=7
+2026-09-23T06:49:10.557Z dir=/home/user/ocaudit8 server=dida365 tools=55
+2026-09-23T06:49:10.610Z dir=/home/user/ocaudit8 server=excel tools=6
+2026-09-23T06:49:10.640Z dir=/home/user/ocaudit8 server=visual-primitives tools=6
+2026-09-23T06:49:10.722Z dir=/home/user/ocaudit8 server=mysql tools=5
+2026-09-23T06:49:10.757Z dir=/home/user/ocaudit8 server=context7 tools=2
+2026-09-23T06:49:10.794Z dir=/home/user/ocaudit8 server=ssh tools=14
+2026-09-23T06:49:10.838Z dir=/home/user/ocaudit8 server=playwright tools=25
+2026-09-23T06:49:10.970Z dir=/home/user/ocaudit8 server=sequential-thinking tools=1
+2026-09-23T06:49:11.190Z dir=/home/user/ocaudit8 server=pdf_reader tools=9
+
+### Re-verification after the typed-mapper refactor (fresh directory ocaudit9)
+# omo registration:
+[2026-09-23T06:46:28.009Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:27.933Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.045Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.169Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.132Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.087Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:27.972Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.546Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.387Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.320Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.198Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.508Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.447Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.238Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:28.579Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:29.201Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:46:48.649Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:47:45.656Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:49:03.401Z] [v2] mcps registered {"registered":4,"names":["websearch","context7","grep_app","codegraph"]}
+[2026-09-23T06:49:22.599Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:49:22.601Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:49:22.601Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:49:22.601Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:50:43.145Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:50:43.146Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:50:43.146Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:50:43.147Z] [v2] mcps registered {"registered":4,"names":["grep_app","context7","lsp","codegraph"]}
+[2026-09-23T06:50:56.800Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:56.836Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:56.868Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:56.964Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.153Z] [v2] mcps registered {"registered":4,"names":["websearch","context7","grep_app","codegraph"]}
+[2026-09-23T06:50:56.999Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:56.930Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:56.895Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.065Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.373Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.321Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.456Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.190Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.423Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.030Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.121Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.246Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.282Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:50:57.602Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+[2026-09-23T06:51:12.266Z] [v2] mcps registered {"registered":5,"names":["websearch","context7","grep_app","lsp","codegraph"]}
+# host connections in the same run (06:51:12 registration -> 06:51:13 lsp connect):
+2026-09-23T06:51:13.237Z server=lsp tools=8
+2026-09-23T06:51:13.557Z server=codegraph tools=0
+2026-09-23T06:51:16.137Z server=grep_app tools=1
+2026-09-23T06:51:16.205Z server=office-word tools=54
+2026-09-23T06:51:16.898Z server=websearch tools=1
+2026-09-23T06:51:17.111Z server=litellm-mcp tools=24

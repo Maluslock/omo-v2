@@ -167,13 +167,34 @@ omo 的 opencode 专属配置必须放在 **`"[opencode]"`（带方括号的键�
 （顺带：`hephaestus` 缺失的真因是 `[agent-registration] Agent skipped: unsupported Hephaestus model`——
 它的配置模型 `new-api/kimi-k2.7-code` 不被识别，属配置问题。）
 
-### 7.2 可攻破点 A：`ctx.mcp.transform` → 恢复 5 个内置 MCP（含 8 个 LSP 工具）
+### 7.2 可攻破点 A：`ctx.mcp.transform` → 恢复 5 个内置 MCP（含 8 个 LSP 工具）—— **已实现并真机验证**
 
 ```ts
 interface MCPEditor { list(); get(name); set(name, config); update(name, update); remove(name) }
 ```
 V2 插件**可以注册 MCP server**。omo 的 tier-1 内置 MCP（`lsp` 提供全部 8 个 `lsp_*` 工具、
 `codegraph`，以及 3 个远端 MCP）因此是可移植的，不是只能等上游。**这是目前性价比最高的一块。**
+
+**实现**：`src/v2/mcp-mapping.ts`（V1 配置 → V2 tag union）+ `src/v2/register-mcps.ts`
+（`ctx.mcp.transform` set/update，按 `omoRuntimeKeyFor` 记忆化），已接入
+`create-v2-plugin.ts` 的 setup。
+
+**真机验证**（opencode 2.0.11，本地 dist，见
+`.omo/evidence/20260923-v2-alignment/live-mcp-audit3.md`）：
+
+| 探针目录 | omo 注册 | 宿主实际连接 |
+|---|---|---|
+| `/home/user/ocaudit7`（默认） | 5 个，含 `lsp` | `lsp tools=8`、`websearch tools=1`、`context7 tools=2`、`grep_app tools=1`、`codegraph tools=0` |
+| `/home/user/ocaudit8`（`disabled_mcps:["lsp"]`） | 4 个，无 `lsp` | **无 `lsp`**；其余照旧 |
+
+宿主日志里的 `mcp connected server=lsp tools=8` 是宿主 MCP client 完成 stdio 握手后自己打的，
+omo 的 transform 单独打不出来；负对照又排除了"opencode 自带 lsp MCP"这一解释。所以
+**8 个 LSP 工具在 V2 下确实回来了，且 omo 的配置开关在移植后依然生效**。
+
+**注意（方法学修正）**：`ctx.tool.list()` / `ctx.mcp.list()` 在 setup 期返回空
+（transform 是惰性的，MCP 是 setup 之后异步连接的），因此**不能**用"工具总数 68→74"当注册契约——
+那个数字取决于采样瞬间有几个 server 连完。注册的真凭据是宿主的 `mcp connected` 行。
+另外宿主拒绝以 `console.log` 输出的插件日志，探针必须写文件。
 
 ### 7.3 可攻破点 B：`ctx.command.transform.add` → 恢复 6 个 slash 命令
 
@@ -210,10 +231,36 @@ interface SkillEditor { list(); get(id); add(skill); update(id, u); remove(id) }
 
 ### 7.6 修正后的缺口排序
 
-1. **MCP（含 8 个 LSP 工具）** —— 有 `ctx.mcp.transform`，可做；
+1. ~~**MCP（含 8 个 LSP 工具）**~~ —— **已完成并真机验证**（§7.2）；
 2. **Commands + skill 注册** —— 有 `ctx.command.transform` / `ctx.skill.transform`，可做；
 3. ~~`session_*` 四个~~ —— 实测**无数据**（见 §7.5），仍是真缺口；
 4. **`skill` 工具** —— 用 permission 域替代 ask；
 5. **team-mode / monitor** —— 工具本身在拉黑名单，需确认真实依赖。
 
 即：**官方 20–39 的区间里，绝大多数是有路径的**，真正无解的目前只有"V2 不暴露的 host 能力"这一类。
+
+## 8. 关键发现：已发布的 npm 包在 2.0.11 上完全加载失败
+
+这一条不属于移植工作本身，但比移植缺口严重得多，必须记下来。
+
+用户真实全局配置 `~/.config/opencode/opencode.json`：
+
+```json
+{ "plugin": ["superpowers@git+https://github.com/obra/superpowers.git", "oh-my-openagent@latest"] }
+```
+
+该 npm 包在当前宿主的日志里**加载失败了 502 次**：
+
+```
+level=WARN message="failed to load plugin" target=oh-my-openagent@latest
+cause="PluginModule.LoadError: Plugin must export a default definition with an id and an effect or
+setup function. (cause: SchemaError(Missing key at ["default"]["effect"] /
+Missing key at ["default"]["setup"]))"
+```
+
+原因是已发布 bundle 导出的是 V1 形状 `{ id: "oh-my-openagent", server: ... }`，而 V2 不再接受
+`server`，只认 `setup` / `effect`。也就是说：**在这台机器上，用户的 omo（npm 版）目前是彻底死的，
+唯一能注册东西的是本地 V2 shim。** 这正是"V1 client shim → P3–P6"这条路线存在的理由，同时也是
+一个待办：shim 完成后要确认发布产物能被 2.0.11 直接加载。
+
+证据：`.omo/evidence/20260923-v2-alignment/v1-published-plugin-rejected.log`。
