@@ -1,0 +1,11 @@
+{"path": "/v1/responses", "x_initiator": "agent", "has_marker_in_body": false, "is_title_request": true}
+{"path": "/v1/chat/completions", "x_initiator": "agent", "has_marker_in_body": false, "is_title_request": true}
+{"path": "/v1/chat/completions", "x_initiator": null, "has_marker_in_body": false, "is_title_request": false}
+{"path": "/v1/chat/completions", "x_initiator": null, "has_marker_in_body": false, "is_title_request": false}
+{"path": "/v1/chat/completions", "x_initiator": null, "has_marker_in_body": false, "is_title_request": false}
+{"path": "/v1/responses", "x_initiator": "agent", "has_marker_in_body": true, "is_title_request": true}
+{"path": "/v1/chat/completions", "x_initiator": "agent", "has_marker_in_body": true, "is_title_request": true}
+{"path": "/v1/chat/completions", "x_initiator": "agent", "has_marker_in_body": true, "is_title_request": false}
+{"path": "/v1/chat/completions", "x_initiator": "agent", "has_marker_in_body": true, "is_title_request": false}
+{"path": "/v1/chat/completions", "x_initiator": "agent", "has_marker_in_body": true, "is_title_request": false}
+{"path": "/v1/chat/completions", "x_initiator": null, "has_marker_in_body": false, "is_title_request": false}

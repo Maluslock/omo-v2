@@ -7,6 +7,7 @@ import { createPluginInterface } from "../plugin-interface"
 import { createSessionCompactingHandler } from "../plugin/session-compacting"
 import { log } from "../shared"
 import { createFirstMessageVariantGate } from "../shared/first-message-variant"
+import { createPromptMessageTracker, registerOmoChatHeadersHook } from "./chat-headers-mapping"
 import { startCompactionEndRestore, type CompactionRestoreHooks } from "./compaction-end-restore"
 import { startV2EventSubscription } from "./event-subscription"
 import {
@@ -82,6 +83,7 @@ async function registerSessionHooks(
     session.hook(name, callback as never) as Promise<HookRegistration>
 
   const registrations: HookRegistration[] = []
+  const promptMessageTracker = createPromptMessageTracker()
   const chatMessage = handlers["chat.message"]
   if (typeof chatMessage === "function") {
     registrations.push(await registerOmoPromptHook(registrar, chatMessage as never))
@@ -97,6 +99,10 @@ async function registerSessionHooks(
   const chatParams = handlers["chat.params"]
   if (typeof chatParams === "function") {
     registrations.push(await registerOmoModelRequestHook(registrar, chatParams as never))
+  }
+  const chatHeaders = handlers["chat.headers"]
+  if (typeof chatHeaders === "function") {
+    registrations.push(...(await registerOmoChatHeadersHook(registrar, chatHeaders as never, promptMessageTracker)))
   }
   registrations.push(await registerOmoCompactionHook(registrar, compaction as never))
   for (const registration of registrations) disposals.push(() => registration.dispose())

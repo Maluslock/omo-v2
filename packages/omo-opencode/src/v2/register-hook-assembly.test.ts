@@ -44,6 +44,7 @@ function createFixture() {
         event: async () => {},
         "chat.message": async () => {},
         "chat.params": async () => {},
+        "chat.headers": async () => {},
         "tool.execute.before": async () => {},
         "tool.execute.after": async () => {},
         "experimental.chat.messages.transform": async () => {},
@@ -97,7 +98,16 @@ describe("registerOmoHooks", () => {
     // two subscriptions: the V1 event dispatch, and the compaction-end state restore
     expect(calls.subscribe).toBe(2)
     expect(calls.toolHooks).toEqual(["execute.before", "execute.after"])
-    expect(calls.sessionHooks).toEqual(["prompt", "context", "context", "context", "compaction"])
+    expect(calls.sessionHooks).toEqual([
+      "prompt",
+      "context",
+      "context",
+      "context",
+      // chat.headers adds a prompt registration (message-id tracker) and a model.request registration
+      "prompt",
+      "model.request",
+      "compaction",
+    ])
     expect(calls.createdPluginInterfaces).toBe(1)
   })
 
@@ -109,7 +119,7 @@ describe("registerOmoHooks", () => {
 
     expect(calls.subscribe).toBe(2)
     expect(calls.toolHooks).toHaveLength(2)
-    expect(calls.sessionHooks).toHaveLength(5)
+    expect(calls.sessionHooks).toHaveLength(7)
     expect(calls.createdPluginInterfaces).toBe(1)
   })
 
@@ -126,6 +136,8 @@ describe("registerOmoHooks", () => {
       "session:context",
       "session:context",
       "session:context",
+      "session:prompt",
+      "session:model.request",
       "session:compaction",
     ])
   })
