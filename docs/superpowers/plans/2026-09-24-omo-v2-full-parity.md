@@ -58,7 +58,7 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 | `permission` (V1 `ctx.ask`) | `permission.hook("evaluate")` + `permission.list/get/reply`. **No consumer today**: both `ask` sites are optional and the only bash-ask tool (`monitor_*`) is unported. Use it when an ask-gated tool lands (P6-B3). | **P5-A3 assessed: no change** |
 | shell guards (`interactive_bash`, bash read guard) | `shell.hook("create.before")` exists, but **omo never had a `shell.env` hook**: `non-interactive-env` is driven by `tool.execute.before`, already registered. | **P5-A4 assessed: not applicable** |
 | `experimental.compaction.autocontinue` | **DONE for the omo-owned half**: `session.compaction.ended` (V2 has these events) drives `compactionContextInjector.restore` + `compactionTodoPreserver.restore` with V1's duplicate guard. The host question (`output.enabled`) has no V2 home, and V2 was measured NOT to resume an idle compacted turn; injecting a continuation prompt is deliberately skipped until mid-turn compaction is measured. | **P5-A5 done (mid-turn question open)** |
-| `tool.definition` (todo description override) | candidates: `aisdk.hook("language")` tool list rewrite, or `session.hook("http.request")` body patch | **P5-A6, low value, verify or record as unportable** |
+| `tool.definition` (todo description override) | **no target**: omo's only `tool.definition` hook rewrites the host `todowrite` description, and V2 ships no todo tool at all (binary grep: `todowrite` 0 hits vs `skill` 111 / `glob` 703). | **P5-A6 assessed: not applicable** |
 | `command.execute.before` (auto-slash-command interception) | none needed: commands are now real V2 commands; the V1 interception only existed because V1 could not register commands | **closed** |
 
 ### Tools
@@ -106,7 +106,8 @@ service -> evidence under `.omo/evidence/20260923-v2-alignment/` -> commit.
 8. **P6-B1** session index for `session_list/search/info` (storage-backed; indexes sessions observed
    from load time, no backfill), and a TUI companion if exact/backfilled enumeration is required.
 8. **P6-C1** build/publish path.
-9. **P5-A6** `tool.definition` (verify feasibility, else record as unportable).
+9. **P5-A6** `tool.definition` — assessed, no target tool on V2 (the description belongs to the
+   re-implemented task tool if P6-B2 lands).
 
 ## 4. Verification requirements (hardening after the tool-turn bug)
 
