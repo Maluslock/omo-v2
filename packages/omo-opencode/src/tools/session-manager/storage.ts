@@ -41,6 +41,29 @@ function mergeSessionIds(sdkSessionIds: string[], fileSessionIds: string[]): str
 // SDK client reference for beta mode
 let sdkClient: PluginInput["client"] | null = null
 
+/**
+ * Enumeration seam for hosts where the SDK client cannot list sessions.
+ *
+ * OpenCode V2 exposes no session listing to server plugins, so `session_list` and the all-sessions
+ * mode of `session_search` would otherwise fall through to the legacy file layout and find nothing
+ * (measured: 0 sessions). The V2 adapter installs an index-backed source here. When it is absent the
+ * pre-existing SDK-then-file behaviour is unchanged, which keeps the V1 host path intact.
+ */
+export type SessionIndexSource = {
+  readonly listMainSessions: (directory?: string) => Promise<SessionMetadata[]>
+  readonly listAllSessionIds: () => Promise<string[]>
+}
+
+let sessionIndexSource: SessionIndexSource | null = null
+
+export function setSessionIndexSource(source: SessionIndexSource | null): void {
+  sessionIndexSource = source
+}
+
+export function resetSessionIndexSource(): void {
+  sessionIndexSource = null
+}
+
 export function setStorageClient(client: PluginInput["client"]): void {
   sdkClient = client
 }
@@ -51,6 +74,17 @@ export function resetStorageClient(): void {
 
 export async function getMainSessions(options: GetMainSessionsOptions): Promise<SessionMetadata[]> {
   const directory = normalizeProjectFilter(options.directory)
+
+  if (sessionIndexSource) {
+    try {
+      const indexed = await sessionIndexSource.listMainSessions(directory)
+      const fileSessions = await getFileMainSessions(directory)
+      return mergeSessionMetadataLists(indexed, fileSessions)
+    } catch (error) {
+      log("[session-manager] falling back to the SDK/file session list after the index source failed", { error: String(error) })
+    }
+  }
+
   if (isSqliteBackend() && sdkClient) {
     try {
       const sdkSessions = await getSdkMainSessions(sdkClient, directory)
@@ -66,6 +100,16 @@ export async function getMainSessions(options: GetMainSessionsOptions): Promise<
 }
 
 export async function getAllSessions(): Promise<string[]> {
+  if (sessionIndexSource) {
+    try {
+      const indexed = await sessionIndexSource.listAllSessionIds()
+      const fileSessionIds = await getFileAllSessions()
+      return mergeSessionIds(indexed, fileSessionIds)
+    } catch (error) {
+      log("[session-manager] falling back to the SDK/file session ids after the index source failed", { error: String(error) })
+    }
+  }
+
   if (isSqliteBackend() && sdkClient) {
     try {
       const sdkSessionIds = await getSdkAllSessions(sdkClient)

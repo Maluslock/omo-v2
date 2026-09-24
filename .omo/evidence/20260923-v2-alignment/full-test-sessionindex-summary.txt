@@ -1,0 +1,13 @@
+# Full suite after the session index (2026-09-24)
+
+ 12874 pass
+ 3 skip
+ 15 fail
+Ran 12892 tests across 1693 files. [260.34s]
+Full log: full-test-sessionindex.log
+Failure set identical to the baseline (15 pre-existing); +16 new tests.
+
+Caught during this work: the first run had 3 extra failures because the installed
+enumeration source is process-global and leaked from the registrar tests into the
+session-manager storage tests. The source now uninstalls when the last index goes away,
+and the tests reset it after each case.

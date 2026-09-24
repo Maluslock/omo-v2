@@ -1,0 +1,25 @@
+### run3 — omo_session_list after a server restart (--standalone, isolated XDG)
+[0m
+> Sisyphus - ultraworker · deepseek-v4-pro
+[0m⚙ [0momo_session_list {"limit":10} 
+> Sisyphus - ultraworker · deepseek-v4-pro
+```
+| Session ID                     | Messages | First      | Last       | Agents |
+|--------------------------------|----------|------------|------------|--------|
+| ses_f2e153021ffe3MHXoxbnDpudae | 2        | 2026-09-24 | 2026-09-24 | none |
+| ses_f2e15552effexBTZBIuNQQKm0Z | 3        | 2026-09-24 | 2026-09-24 | none |
+| ses_f2e1575daffeGhSSsT5el2gYNO | 3        | 2026-09-24 | 2026-09-24 | none |
+```
+
+### run4 — omo_session_search query=FIRST_MARKER_ALPHA without session_id
+[ses_f2e1575daffeGhSSsT5el2gYNO] msg_0d1ea8f47001yCf0cQechgZODn (user) 2026-09-24T05:36:46.227Z
+  "Reply with exactly FIRST_MARKER_ALPHA"
+  Matches: 1
+
+[ses_f2e1575daffeGhSSsT5el2gYNO] msg_0d1ea92d4001zbQK46aGy0J0MB (assistant) 2026-09-24T05:36:46.842Z
+  FIRST_MARKER_ALPHA
+  Matches: 1
+```
+
+### run5 — omo_session_info (raw JSON tool call captured)
+"tool":"omo_session_info","state":{"status":"completed","input":{"session_id":"ses_f2e153021ffe3MHXoxbnDpudae"}

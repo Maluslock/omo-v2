@@ -170,6 +170,8 @@ describe("registerOmoTools", () => {
       skill_mcp: fakeTool("skill_mcp"),
       session_read: fakeTool("session_read"),
       session_list: fakeTool("session_list"),
+      session_search: fakeTool("session_search"),
+      session_info: fakeTool("session_info"),
       skill: fakeTool("skill"),
       team_list: fakeTool("team_list"),
     })
@@ -186,12 +188,15 @@ describe("registerOmoTools", () => {
       "omo_background_cancel",
       "omo_skill_mcp",
       "omo_session_read",
+      "omo_session_list",
+      "omo_session_search",
+      "omo_session_info",
     ])
     for (const name of SHIM_UNLOCKED_TOOLS) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(false)
       expect(editor.get(`omo_${name}`)).toBeDefined()
     }
-    for (const name of ["session_list", "skill", "team_list"]) {
+    for (const name of ["skill", "team_list", "task_create"]) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(true)
       expect(editor.get(`omo_${name}`)).toBeUndefined()
       expect(editor.addCalls).not.toContain(`omo_${name}`)
