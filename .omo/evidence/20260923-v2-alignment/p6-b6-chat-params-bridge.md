@@ -75,8 +75,8 @@ The category sets `max_tokens` (the documented key in `CategoryConfigSchema`), b
 ```
 
 So a user's `max_tokens` never reaches the delegate model on V1 or V2 alike. Recorded as an open item
-in the parity plan rather than fixed here: it is not a V2 alignment gap, and changing what a
-long-documented config key does deserves its own change and QA.
+at the time; **fixed separately in `p6-b8-category-max-tokens.md`** (documented key read first,
+deprecated alias as fallback).
 
 ### The `context.options` surface is closed and typed
 
