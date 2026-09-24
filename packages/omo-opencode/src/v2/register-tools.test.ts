@@ -168,6 +168,7 @@ describe("registerOmoTools", () => {
       background_output: fakeTool("background_output"),
       background_cancel: fakeTool("background_cancel"),
       skill_mcp: fakeTool("skill_mcp"),
+      session_read: fakeTool("session_read"),
       session_list: fakeTool("session_list"),
       skill: fakeTool("skill"),
       team_list: fakeTool("team_list"),
@@ -184,6 +185,7 @@ describe("registerOmoTools", () => {
       "omo_background_output",
       "omo_background_cancel",
       "omo_skill_mcp",
+      "omo_session_read",
     ])
     for (const name of SHIM_UNLOCKED_TOOLS) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(false)

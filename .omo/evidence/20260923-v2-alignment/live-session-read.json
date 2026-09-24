@@ -1,0 +1,12 @@
+[
+  {
+    "tool": "omo_session_read",
+    "status": "completed",
+    "input": {
+      "session_id": "ses_f2e968df1ffepW47sam0W7QFaW",
+      "from_end": true
+    },
+    "outputLength": 17285,
+    "outputHead": "\n[user] 2026-09-24T03:15:47.495Z\n\"Use the glob tool with pattern *.md, then reply exactly FIRST_DONE\"\n\n[assistant] 2026-09-24T03:15:47.611Z\n[tool result] ...\n\n[system] 2026-09-24T03:15:51.559Z\nThe Cod"
+  }
+]

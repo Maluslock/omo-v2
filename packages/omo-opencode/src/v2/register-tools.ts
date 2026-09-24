@@ -21,8 +21,10 @@ const NAMESPACE = "omo"
  * `background_cancel`, `skill_mcp`) is registered instead — see `createV1ClientShim`.
  *
  * Still excluded:
- * - `session_*` — `setStorageClient` plus SDK session reads that need `session.list`/`session.todo`,
- *   which V2 does not expose to plugins (`ctx.session` is a `Pick` of `SessionApi`).
+ * - `session_list`/`session_search`/`session_info` — they enumerate sessions through
+ *   `client.session.list()`, which V2 does not expose to plugins (`ctx.session` is a `Pick` of
+ *   `SessionApi`, and its runtime key set was checked: no `list`). `session_read` only needs one
+ *   session's messages, which the shim serves from `ctx.session.context`, so it is unlocked.
  * - `task_create`/`task_update` — `todo-sync` reads `ctx.client.session.todo`; V2 removed todos.
  * - `skill` — blocked by the V2 ToolContext `ask` gap (fail-closed), independent of the client.
  * - `monitor_*` — the monitor manager is constructed around a client surface V2 lacks.
@@ -32,7 +34,6 @@ const NAMESPACE = "omo"
  */
 export const CLIENT_DEPENDENT_TOOLS: ReadonlySet<string> = new Set([
   "session_list",
-  "session_read",
   "session_search",
   "session_info",
   "task_create",
@@ -62,6 +63,7 @@ export const CLIENT_DEPENDENT_TOOLS: ReadonlySet<string> = new Set([
  */
 export const SHIM_UNLOCKED_TOOLS: ReadonlySet<string> = new Set([
   "call_omo_agent",
+  "session_read",
   "look_at",
   "task",
   "background_output",

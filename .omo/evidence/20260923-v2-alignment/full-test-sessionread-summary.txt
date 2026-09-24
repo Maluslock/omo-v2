@@ -1,0 +1,8 @@
+# Full suite after the session_read unlock (2026-09-24)
+
+ 12855 pass
+ 3 skip
+ 15 fail
+Ran 12873 tests across 1691 files. [333.04s]
+Full log: full-test-sessionread.log
+Failure set identical to the previous run (diff empty); same 15 pre-existing failures.
