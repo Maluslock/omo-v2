@@ -8,6 +8,7 @@ import { createTools } from "../create-tools"
 import { registerManagerForCleanup, unregisterManagerForCleanup } from "../features/background-agent/process-cleanup"
 import { createModelCacheState } from "../plugin-state"
 import { log } from "../shared"
+import { createV2AskResolver } from "./ask-resolver"
 import { createV1ClientShim, type V2ClientShimSource } from "./client-shim"
 import { ArgSchemaProvenanceError, toV2Tool } from "./tool-mapping"
 
@@ -32,17 +33,16 @@ const NAMESPACE = "omo"
  *   resolve `opencode/session/todo` on V2 and returns). Their list id is pinned per location
  *   because V2 serves many projects from one process - see `withLocationTaskListId`.
  * - `skill` — blocked by the V2 ToolContext `ask` gap (fail-closed), independent of the client.
- * - `monitor_*` — the monitor manager is constructed around a client surface V2 lacks.
+ * - `monitor_*` are unlocked: their process spawning goes through the repo's own spawn shim, their
+ *   output injection goes through the shared prompt gate (which dispatches into the shim), and the
+ *   `ctx.ask` bash gate is optional - without it monitor falls back to `monitor.allowed_commands`,
+ *   so an enabled monitor needs an explicit allowlist.
  * - `team_*` — every team tool factory receives `ctx.client` and drives tmux/worktree orchestration.
  *
  * Client-free tools (`grep`, `glob`, `edit`, `interactive_bash`, goal tools) stay registered.
  */
 export const CLIENT_DEPENDENT_TOOLS: ReadonlySet<string> = new Set([
   "skill",
-  "monitor_start",
-  "monitor_stop",
-  "monitor_list",
-  "monitor_output",
   "team_create",
   "team_delete",
   "team_shutdown_request",
@@ -69,6 +69,10 @@ export const SHIM_UNLOCKED_TOOLS: ReadonlySet<string> = new Set([
   "session_info",
   "task_create",
   "task_update",
+  "monitor_start",
+  "monitor_stop",
+  "monitor_list",
+  "monitor_output",
   "look_at",
   "task",
   "background_output",
@@ -315,6 +319,9 @@ export async function registerOmoTools(
   }
 
   const directory = ctx.location.directory
+  // V2 has no interactive permission prompt; this resolver keeps the monitor's bash gate usable
+  // through `monitor.allowed_commands` and denies everything else explicitly.
+  const askResolver = createV2AskResolver(pluginConfig)
   const { toolsResult } = await resolveOmoRuntime(ctx, pluginConfig, deps)
   const filteredTools = toolsResult.filteredTools
 
@@ -332,7 +339,7 @@ export async function registerOmoTools(
     }
     registered.push(name)
     try {
-      return [toV2Tool(name, def as unknown as SourceTool, { namespace: NAMESPACE, directory })]
+      return [toV2Tool(name, def as unknown as SourceTool, { namespace: NAMESPACE, directory, ask: askResolver })]
     } catch (error) {
       if (error instanceof ArgSchemaProvenanceError) {
         log("[v2] FATAL: refusing to register tool with mismatched arg-schema provenance", {

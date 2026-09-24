@@ -175,6 +175,10 @@ describe("registerOmoTools", () => {
       session_info: fakeTool("session_info"),
       task_create: fakeTool("task_create"),
       task_update: fakeTool("task_update"),
+      monitor_start: fakeTool("monitor_start"),
+      monitor_stop: fakeTool("monitor_stop"),
+      monitor_list: fakeTool("monitor_list"),
+      monitor_output: fakeTool("monitor_output"),
       skill: fakeTool("skill"),
       team_list: fakeTool("team_list"),
     })
@@ -196,12 +200,16 @@ describe("registerOmoTools", () => {
       "omo_session_info",
       "omo_task_create",
       "omo_task_update",
+      "omo_monitor_start",
+      "omo_monitor_stop",
+      "omo_monitor_list",
+      "omo_monitor_output",
     ])
     for (const name of SHIM_UNLOCKED_TOOLS) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(false)
       expect(editor.get(`omo_${name}`)).toBeDefined()
     }
-    for (const name of ["skill", "team_list", "monitor_start"]) {
+    for (const name of ["skill", "team_list", "team_create"]) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(true)
       expect(editor.get(`omo_${name}`)).toBeUndefined()
       expect(editor.addCalls).not.toContain(`omo_${name}`)
