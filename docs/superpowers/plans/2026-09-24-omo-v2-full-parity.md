@@ -81,7 +81,7 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 | `chat.headers` (Copilot initiator) | **`session.hook("model.request")` is mutable and carries `kind` + `agent` + `model.variant`** (live probe `live-v2-hook-surface.jsonl`). Auxiliary requests (`kind: "title"`) must be skipped. | **P5-A1 confirmed portable** |
 | generation options via `aisdk` | the `aisdk.hook("sdk"/"language")` options are NOT the documented home for `chat.params` (the official mapping table sends `chat.params` to the `context` hook), and they **did not fire** in the probe for an `aisdk:@ai-sdk/openai-compatible` provider. Treat `aisdk` as a provider-SDK extension point, not the params path. | **closed** |
 | plugin→host HTTP self-call | research: **no supported way** for a server plugin to learn the server base URL; the documented service discovery targets the shared background service, `@opencode/client` imports inside plugins are not blessed, and every real-world V2 plugin uses in-process `ctx`. Do not hardcode a port. | **closed (use ctx domains)** |
-| publishing (npm still ships the V1 `{id, server}` shape) | fork is dual-export; `bun run build` locally fails in `git submodule update --init` for `packages/shared-skills/upstreams/*`. **P6-C1** |
+| publishing (npm still ships the V1 `{id, server}` shape) | fork is dual-export. Local build fixed: the submodule failure is repository state (`.gitmodules` declares them, the index has no gitlinks), and the repo already ships `OMO_SKIP_MATERIALIZE=1`, so `OMO_SKIP_MATERIALIZE=1 bun run build` completes and its artifact is live-verified. Actual npm publishing still goes through the release workflow (not run). | **P6-C1 local path done; publish not done** |
 
 ## 3. Execution order
 
@@ -105,7 +105,7 @@ service -> evidence under `.omo/evidence/20260923-v2-alignment/` -> commit.
    (`ctx.generate.text` is also available for judge/summarize steps).
 8. **P6-B1** session index for `session_list/search/info` (storage-backed; indexes sessions observed
    from load time, no backfill), and a TUI companion if exact/backfilled enumeration is required.
-8. **P6-C1** build/publish path.
+8. **P6-C1** build/publish path - local build resolved and verified; publishing itself untouched.
 9. **P5-A6** `tool.definition` — assessed, no target tool on V2 (the description belongs to the
    re-implemented task tool if P6-B2 lands).
 

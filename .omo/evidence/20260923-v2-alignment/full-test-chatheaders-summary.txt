@@ -1,0 +1,11 @@
+# Full suite with the officially built dist (2026-09-24)
+
+ 12892 pass
+ 3 skip
+ 13 fail
+Ran 12908 tests across 1695 files. [272.62s]
+Full log: full-test-chatheaders.log
+
+13 failures = the 15-test baseline MINUS the two 'dist bundle Bun globals' cases, which now
+pass because dist/ was rebuilt with the official pipeline (it runs the node-require-shim step
+my ad-hoc bun build skipped). No new failures.
