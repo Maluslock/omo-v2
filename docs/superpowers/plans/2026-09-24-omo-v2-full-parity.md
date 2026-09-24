@@ -77,7 +77,7 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 
 | item | status |
 |---|---|
-| provider / connected-providers filtering | the earlier "not implementable" verdict was based on `activation` being the only signal. **`ctx.integration.connection.active(integrationID)` + `resolve(connection)` give real connection/credential state**, and `ProviderInfo.integrationID` links provider -> integration. Re-assess and implement. **P5-A7** |
+| provider / connected-providers filtering | **re-assessed with a live probe: stays unimplemented.** `integration.connections` / `connection.active` describe OAuth integrations, not usable providers: on this machine the catalogue has 225 integrations with **0 connections**, `connection.active("opencode")` is `"none"` while that provider works, and `provider.list()` lists only 1 provider (the config-declared deepseek/litellm/new-api are absent). A derived `connected` set would be empty (no change, still fail-open) or, on an OAuth host, would wrongly exclude usable providers. See `p5-a7-provider-connections-assessment.md`. | **P5-A7 assessed: no change** |
 | `chat.headers` (Copilot initiator) | **`session.hook("model.request")` is mutable and carries `kind` + `agent` + `model.variant`** (live probe `live-v2-hook-surface.jsonl`). Auxiliary requests (`kind: "title"`) must be skipped. | **P5-A1 confirmed portable** |
 | generation options via `aisdk` | the `aisdk.hook("sdk"/"language")` options are NOT the documented home for `chat.params` (the official mapping table sends `chat.params` to the `context` hook), and they **did not fire** in the probe for an `aisdk:@ai-sdk/openai-compatible` provider. Treat `aisdk` as a provider-SDK extension point, not the params path. | **closed** |
 | plugin→host HTTP self-call | research: **no supported way** for a server plugin to learn the server base URL; the documented service discovery targets the shared background service, `@opencode/client` imports inside plugins are not blessed, and every real-world V2 plugin uses in-process `ctx`. Do not hardcode a port. | **closed (use ctx domains)** |
@@ -97,7 +97,8 @@ service -> evidence under `.omo/evidence/20260923-v2-alignment/` -> commit.
 4. **P5-A5** `compaction.autocontinue` — done for the state restore; the mid-turn continuation
    question needs a measurement before any prompt injection is added.
 5. **P5-A4** shell guards — assessed, nothing to port (omo's env work rides `tool.execute.before`).
-6. **P5-A7** connected providers via `integration.connection`.
+6. **P5-A7** connected providers — assessed with live data, stays unimplemented (the integration
+   connection API is not a usability signal, and the fail-open fallback already yields the right set).
 7. **P6-B2/B3/B4** task store, monitor, team runtime (largest; team last). All three are rewrites on
    V2-native domains rather than ports: `ctx.session.create/prompt/context` for member sessions,
    `ctx.worktree`/`ctx.vcs` for git orchestration, `ctx.storage` for the task/mailbox state

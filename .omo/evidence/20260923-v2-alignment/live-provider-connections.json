@@ -1,0 +1,16 @@
+{
+  "providers_listed": [
+    {
+      "id": "opencode",
+      "integrationID": "opencode",
+      "activation": "enabled",
+      "hasSettingsKey": true,
+      "canonical": null
+    }
+  ],
+  "integration_catalogue_size": 225,
+  "integrations_with_connections": [],
+  "connection_active": {
+    "opencode": "none"
+  }
+}
