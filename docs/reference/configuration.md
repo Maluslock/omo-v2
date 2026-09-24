@@ -356,7 +356,8 @@ Domain-specific model delegation used by the `task()` tool. When Sisyphus delega
 | `fallback_models`   | string\|array | -       | Fallback models on API errors. Supports strings or mixed arrays of strings and object entries with per-model settings |
 | `temperature`       | number        | -       | Sampling temperature                                                |
 | `top_p`             | number        | -       | Top-p sampling                                                      |
-| `maxTokens`         | number        | -       | Max response tokens                                                 |
+| `max_tokens`        | number        | -       | Max response tokens                                                 |
+| `maxTokens`         | number        | -       | Deprecated alias of `max_tokens`, used only when it is unset        |
 | `thinking`          | object        | -       | Anthropic extended thinking                                         |
 | `reasoningEffort`   | string        | -       | OpenAI reasoning effort. Unsupported values are normalized          |
 | `textVerbosity`     | string        | -       | Text verbosity                                                      |
