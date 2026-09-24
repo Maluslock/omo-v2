@@ -55,7 +55,7 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 | `chat.params` scalars | `ctx.session.hook("context")` -> `event.options` (official mapping) | **done for the keys**: V1 `maxOutputTokens` was written verbatim and V2 only knows `maxTokens`, so the max-output clamp silently did nothing; the bridge now maps keys both ways and seeds the V1 view from live V2 options. Live probe shows `options.maxTokens`/`temperature` reaching the provider body. |
 | `chat.params` agent variant | applied at **agent registration** (`resolveModelVariant` -> agent `model.variant`), which all of this machine's models support via declared variants | done |
 | `chat.params` `reasoningEffort` fallback (models with no declared variants) | no V2 home yet: V1 wrote it onto the mutable `input.message`, which V2 does not have | **open (small)** |
-| `permission` (V1 `ctx.ask`) | `permission.hook("evaluate")` + `permission.list/get/reply` | **P5-A3** |
+| `permission` (V1 `ctx.ask`) | `permission.hook("evaluate")` + `permission.list/get/reply`. **No consumer today**: both `ask` sites are optional and the only bash-ask tool (`monitor_*`) is unported. Use it when an ask-gated tool lands (P6-B3). | **P5-A3 assessed: no change** |
 | shell guards (`interactive_bash`, bash read guard) | `shell.hook("create.before")` | **P5-A4** |
 | `experimental.compaction.autocontinue` | `session.hook("compaction")` output + post-compaction prompt via the gate | **P5-A5** |
 | `tool.definition` (todo description override) | candidates: `aisdk.hook("language")` tool list rewrite, or `session.hook("http.request")` body patch | **P5-A6, low value, verify or record as unportable** |
@@ -68,7 +68,7 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 | `grep`, `glob`, `look_at`, `interactive_bash`, `background_output/cancel`, `call_omo_agent`, `task`, `skill_mcp` | registered (V1 bodies + client shim) | done |
 | `session_read` | shim `session.messages` via `ctx.session.context` | done (`0892185`) |
 | `session_list` / `session_search` / `session_info` | **DONE for path A** (index in `ctx.storage`, fed by the `prompt` hook and the event stream; live-verified across restarts, 13/1 registration). No server-plugin enumeration exists in ANY version. Web research (source-verified): `@opencode/plugin` 2.0.11 and 2.0.15 are byte-identical in `dist/promise/session.d.ts`, `ctx.session` still excludes `list`, three PRs proposing it are open/closed-unmerged (#46690 open), and `ctx.rpc` is not a generic host proxy (`rpc.call` is not attached; only `rpc.register`). **Two viable paths**: (A) omo keeps its own session index in `ctx.storage` (probe-verified: storage persists across restarts; `session.*` events carry `sessionID`), fed by `ctx.event.subscribe` + `session.hook("prompt")`; (B) ship a **TUI companion plugin**, whose shipped context DOES expose `context.data.session.list()` and `context.client` (full client) in 2.0.11. | **A now, B for exact/backfill** |
-| `skill` | omo's own tool is skipped, but the V2 host ships its own `skill` tool and loads omo-registered skills (`→ Skill "git-master"` -> `SKILL_OK`). Re-adding omo's version needs the `ask` gap solved, which `permission.hook("evaluate")` now makes possible. | capability covered; **P5-A3 optional** |
+| `skill` | the V2 host's own `skill` tool loads omo-registered skills (live-verified), and every omo `ask` site is optional (`ctx?.ask`), so nothing is blocked. Registering omo's would add a duplicate namespaced tool that bypasses the host's permission flow; the two real deltas (slash-command execution, `definition.agent` restriction) are recorded instead. | **P5-A3 assessed: no change** |
 | `task_create` / `task_update` | V2 removed host todos. Re-implement the per-session task store on `ctx.storage` and keep the tool contract; `todo-sync` becomes a no-op. | **P6-B2 (rewrite)** |
 | `monitor_*` | monitor spawns commands; `ctx.shell` only has a hook, so the manager needs its own process spawning (Node/Bun) + output ring. Harness-neutral parts live in the repo already. | **P6-B3 (rewrite)** |
 | `team_*` (12) | runtime primitives are harness-neutral (`packages/team-core`); the missing link is "spawn member session + send prompt + read result", and **`ctx.session.create/prompt/context` all exist**. Worktree orchestration can use `ctx.worktree`, git probes `ctx.vcs`. | **P6-B4 (rewrite, largest)** |
@@ -91,7 +91,9 @@ service -> evidence under `.omo/evidence/20260923-v2-alignment/` -> commit.
 1. **P5-A1** `model.request` headers/baseURL (closes Copilot initiator).
 2. **P5-A2** `aisdk` options (generation params + variant). Probe first: dump `options` for a real
    request to learn the exact keys before writing the mapping.
-3. **P5-A3** `permission.hook("evaluate")` -> re-enable omo's `skill` tool and any ask-gated path.
+3. **P5-A3** `permission` — assessed, no change needed (see the evidence note); the hook is the
+   mechanism to use when an ask-gated tool is ported, and omo's `skill` tool stays unregistered in
+   favour of the host's.
 4. **P5-A5** `compaction.autocontinue`.
 5. **P5-A4** shell guards.
 6. **P5-A7** connected providers via `integration.connection`.
