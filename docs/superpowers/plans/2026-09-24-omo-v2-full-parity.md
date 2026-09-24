@@ -51,9 +51,10 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 | `tool.execute.before/after` | `tool.hook("execute.before/after")` | done |
 | `experimental.session.compacting` | `session.hook("compaction")` | done |
 | `event` | `ctx.event.subscribe` | done |
-| `chat.headers` (Copilot `x-initiator`) | `session.hook("model.request")` -> mutable `headers` | **P5-A1, not wired** |
-| `chat.params` (temperature/topP/topK/maxOutputTokens) | `aisdk.hook("sdk"/"language")` `options` (raw AI-SDK layer) | **P5-A2, not wired** |
-| `chat.params` agent variant / thinking / effort | same aisdk options; needs a live probe to find which key carries them | **P5-A2, needs probe first** |
+| `chat.headers` (Copilot `x-initiator`) | `session.hook("model.request")` -> mutable `headers` (official mapping). **Copilot-only**: the handler returns early for every other provider, and this machine has no Copilot provider, so it has zero runtime effect here and is kept for parity. Needs an internal-initiator signal, which V2 does not pass on `model.request` (no message); the V1 handler looked the marker up through `client.session.message`, now available in the shim. | **P5-A1, deferred to a parity-only item** |
+| `chat.params` scalars | `ctx.session.hook("context")` -> `event.options` (official mapping) | **done for the keys**: V1 `maxOutputTokens` was written verbatim and V2 only knows `maxTokens`, so the max-output clamp silently did nothing; the bridge now maps keys both ways and seeds the V1 view from live V2 options. Live probe shows `options.maxTokens`/`temperature` reaching the provider body. |
+| `chat.params` agent variant | applied at **agent registration** (`resolveModelVariant` -> agent `model.variant`), which all of this machine's models support via declared variants | done |
+| `chat.params` `reasoningEffort` fallback (models with no declared variants) | no V2 home yet: V1 wrote it onto the mutable `input.message`, which V2 does not have | **open (small)** |
 | `permission` (V1 `ctx.ask`) | `permission.hook("evaluate")` + `permission.list/get/reply` | **P5-A3** |
 | shell guards (`interactive_bash`, bash read guard) | `shell.hook("create.before")` | **P5-A4** |
 | `experimental.compaction.autocontinue` | `session.hook("compaction")` output + post-compaction prompt via the gate | **P5-A5** |
@@ -78,7 +79,7 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 |---|---|
 | provider / connected-providers filtering | the earlier "not implementable" verdict was based on `activation` being the only signal. **`ctx.integration.connection.active(integrationID)` + `resolve(connection)` give real connection/credential state**, and `ProviderInfo.integrationID` links provider -> integration. Re-assess and implement. **P5-A7** |
 | `chat.headers` (Copilot initiator) | **`session.hook("model.request")` is mutable and carries `kind` + `agent` + `model.variant`** (live probe `live-v2-hook-surface.jsonl`). Auxiliary requests (`kind: "title"`) must be skipped. | **P5-A1 confirmed portable** |
-| `chat.params` generation options | no field on `model.request`; the `aisdk.hook("sdk"/"language")` options are the intended home but **did not fire** in the probe for an `aisdk:@ai-sdk/openai-compatible` provider. Needs a further probe (ordering / package kind). | **P5-A2 open question** |
+| generation options via `aisdk` | the `aisdk.hook("sdk"/"language")` options are NOT the documented home for `chat.params` (the official mapping table sends `chat.params` to the `context` hook), and they **did not fire** in the probe for an `aisdk:@ai-sdk/openai-compatible` provider. Treat `aisdk` as a provider-SDK extension point, not the params path. | **closed** |
 | plugin→host HTTP self-call | research: **no supported way** for a server plugin to learn the server base URL; the documented service discovery targets the shared background service, `@opencode/client` imports inside plugins are not blessed, and every real-world V2 plugin uses in-process `ctx`. Do not hardcode a port. | **closed (use ctx domains)** |
 | publishing (npm still ships the V1 `{id, server}` shape) | fork is dual-export; `bun run build` locally fails in `git submodule update --init` for `packages/shared-skills/upstreams/*`. **P6-C1** |
 

@@ -74,7 +74,7 @@ export interface Context {
 There is **no `client`, no URL, no port**. Confirmed by the docs:
 
 - [Plugins overview](https://opencode.ai/v2/docs/build/plugins) — "The plugin context is essentially
-  an [OpenCode server client](/v2/docs/build/client). Its read and action methods use the same inputs
+  an [OpenCode server client](https://opencode.ai/v2/docs/build/client). Its read and action methods use the same inputs
   and responses as the client. It adds plugin-only methods for transforms, runtime hooks, reloads,
   registrations, and plugin options."
 - [Migrate from V1](https://opencode.ai/v2/docs/build/plugins/migrate-v1) — the migration table maps

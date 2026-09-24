@@ -55,6 +55,7 @@ export type V1ShimClient = {
     get: (input: { path?: { id?: string } }) => Promise<V1ShimResponse<V1ShimSessionInfo>>
     create: (input: { body?: Json; query?: Json }) => Promise<V1ShimResponse<V1ShimSessionInfo>>
     messages: (input: { path?: { id?: string }; query?: Json }) => Promise<V1ShimResponse<V1ShimMessage[]>>
+    message: (input: { path?: { id?: string; messageID?: string } }) => Promise<V1ShimResponse<V1ShimMessage>>
     abort: (input: { path?: { id?: string } }) => Promise<V1ShimResponse<boolean>>
     status: () => Promise<V1ShimResponse<Json>>
     todo: (input?: Json) => Promise<V1ShimResponse<unknown[]>>
@@ -216,6 +217,25 @@ export function createV1ClientShim(source: V2ClientShimSource): Json {
     }
   }
 
+  // V1 `session.message({path:{id, messageID}})` returns a single message. Two omo consumers use it:
+  // the anthropic context-window recovery reader and the `chat.headers` internal-initiator check.
+  // V2 has no per-message route the plugin can reach, so it is derived from the message list.
+  const message = async (input: { path?: { id?: string; messageID?: string } }): Promise<V1ShimResponse<V1ShimMessage>> => {
+    const id = input?.path?.id
+    const messageID = input?.path?.messageID
+    if (typeof id !== "string" || typeof messageID !== "string") {
+      return { data: undefined, error: "session.message requires path.id and path.messageID" }
+    }
+    const listed = await messages({ path: { id } })
+    const found = (listed.data ?? []).find((entry) => {
+      const info = isRecord(entry?.info) ? entry.info : undefined
+      return info?.id === messageID
+    })
+    return found === undefined
+      ? { data: undefined, error: `session.message: ${messageID} not found in ${id}` }
+      : { data: found }
+  }
+
   const abort = async (input: { path?: { id?: string } }): Promise<V1ShimResponse<boolean>> => {
     const id = input?.path?.id
     if (typeof id !== "string" || typeof session.interrupt !== "function") return { data: false }
@@ -279,6 +299,7 @@ export function createV1ClientShim(source: V2ClientShimSource): Json {
     get,
     create,
     messages,
+    message,
     abort,
     // Honest stubs: V2 exposes neither `session.status` nor `session.todo` to plugins. The
     // background manager treats an empty status map as "not active" and falls back to

@@ -1,0 +1,12 @@
+# Full suite after the generation-options fix (2026-09-24)
+
+ 12858 pass
+ 3 skip
+ 15 fail
+Ran 12876 tests across 1691 files. [293.97s]
+Full log: full-test-genoptions.log
+Failure set identical to the baseline (15 pre-existing).
+
+Note: an earlier run of this suite caught a regression introduced by the research-report
+commit: a site-root-relative link in a committed report was resolved as a workspace path by
+the markdown local link audit. Fixed to an absolute URL; the audit is green.

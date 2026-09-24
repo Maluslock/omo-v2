@@ -50,13 +50,27 @@ describe("applyV1ChatParams", () => {
 
     applyV1ChatParams(event, pair.output)
 
+    // V2 has no `maxOutputTokens`: the V1 name must be written as `maxTokens`
     expect(event.options).toEqual({
       existing: true,
       temperature: 0.2,
       topP: 0.9,
-      maxOutputTokens: 32000,
+      maxTokens: 32000,
       reasoningEffort: "high",
     })
+    expect(event.options).not.toHaveProperty("maxOutputTokens")
+  })
+
+  it("seeds the V1 scalars from the live V2 options so handlers see current values", () => {
+    // given a context event that already carries a maxTokens setting under the V2 name
+    const event = { ...structuredClone(CONTEXT_EVENT), options: { maxTokens: 1234, temperature: 0.5 } } as Record<string, unknown>
+
+    // when
+    const pair = toV1ChatParams(event)!
+
+    // then the V1 view exposes them under the V1 names
+    expect(pair.output.maxOutputTokens).toBe(1234)
+    expect(pair.output.temperature).toBe(0.5)
   })
 
   it("does not introduce settings the handler never set", () => {

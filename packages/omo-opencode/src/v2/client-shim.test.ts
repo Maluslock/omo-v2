@@ -183,6 +183,28 @@ describe("createV1ClientShim session domain", () => {
     expect(data[1]?.info).toMatchObject({ role: "user" })
   })
 
+  it("returns one message by id for session.message, which the V1 recovery and header hooks call", async () => {
+    // given a session whose messages are reachable through session.context
+    const { source } = createSource()
+    const client: V1ShimClient = createV1ClientShim(source)
+
+    // when
+    const found = await client.session.message({ path: { id: "ses_1", messageID: "m2" } })
+
+    // then the matching message comes back in the V1 {info, parts} shape
+    expect(found.error).toBeUndefined()
+    expect(found.data?.info).toMatchObject({ id: "m2", role: "assistant" })
+  })
+
+  it("reports an error for a missing message or an incomplete path", async () => {
+    const { source } = createSource()
+    const client: V1ShimClient = createV1ClientShim(source)
+    expect((await client.session.message({ path: { id: "ses_1", messageID: "nope" } })).data).toBeUndefined()
+    expect((await client.session.message({ path: { id: "ses_1", messageID: "nope" } })).error).toBeDefined()
+    expect((await client.session.message({ path: { id: "ses_1" } })).error).toBeDefined()
+    expect((await client.session.message({})).error).toBeDefined()
+  })
+
   it("returns honest empty stubs for status and todo", async () => {
     const { source } = createSource()
     const client: V1ShimClient = createV1ClientShim(source)

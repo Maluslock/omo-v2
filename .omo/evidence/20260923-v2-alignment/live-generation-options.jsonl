@@ -1,0 +1,3 @@
+{"label":"set-context-options","payload":{"maxTokens":4242,"temperature":0.25,"modelVariant":"default","kind":null}}
+{"label":"wire-body","payload":{"maxTokensInBody":false,"temperatureInBody":false,"snippet":"{\"model\":\"deepseek-v4-pro\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a title generator. You output ONLY a thread title. Nothing else.\\n\\n<task>\\nGenerate a brief title that would help the user f"}}
+{"label":"wire-body","payload":{"maxTokensInBody":true,"temperatureInBody":true,"snippet":"{\"model\":\"deepseek-v4-pro\",\"messages\":[{\"role\":\"system\",\"content\":\"You are an AI agent running in OpenCode, a coding agent harness. Help the user accomplish their goals using the tools you have availa"}}

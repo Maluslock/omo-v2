@@ -32,8 +32,23 @@ export type V1ChatParamsOutput = {
   options: Record<string, unknown>
 }
 
-/** V1 scalar generation settings, lifted onto V2 `options`. */
-export const GENERATION_KEYS = ["temperature", "topP", "topK", "maxOutputTokens"] as const
+/**
+ * V1 scalar generation setting -> V2 `SessionRequestOptions` name.
+ *
+ * V2's typed generation fields are `maxTokens`, `temperature`, `topP`, `topK`,
+ * `frequencyPenalty`, `presencePenalty`, `seed`, `stop` (`@opencode/ai` `GenerationOptionsFields`).
+ * There is no `maxOutputTokens`: writing that name lands as an unknown provider option instead of a
+ * generation setting, so the max-output clamp silently did nothing. The V1 name stays in the V1
+ * view because omo's hooks read and write it.
+ */
+export const GENERATION_KEY_MAP = {
+  temperature: "temperature",
+  topP: "topP",
+  topK: "topK",
+  maxOutputTokens: "maxTokens",
+} as const
+
+export const GENERATION_KEYS = Object.keys(GENERATION_KEY_MAP) as Array<keyof typeof GENERATION_KEY_MAP>
 
 export function toV1ChatParams(
   event: unknown,
@@ -50,18 +65,33 @@ export function toV1ChatParams(
       model: { providerID, modelID },
       provider: { id: providerID },
     },
-    output: { options: isRecord(event.options) ? { ...event.options } : {} },
+    // Seed the V1 scalars from the current V2 options so omo's chain sees the live values, the way
+    // V1 handlers received the host's current params rather than an empty object.
+    output: {
+      ...seedV1GenerationFromV2Options(isRecord(event.options) ? event.options : {}),
+      options: isRecord(event.options) ? { ...event.options } : {},
+    },
   }
 }
 
-/** Merge the handler's generation settings back onto the V2 context options. */
+/** Read the current V2 generation options back into the V1 scalar names. */
+export function seedV1GenerationFromV2Options(options: Record<string, unknown>): Omit<V1ChatParamsOutput, "options"> {
+  const seeded: Omit<V1ChatParamsOutput, "options"> = {}
+  for (const [v1Key, v2Key] of Object.entries(GENERATION_KEY_MAP)) {
+    const value = options[v2Key]
+    if (typeof value === "number") seeded[v1Key as keyof typeof GENERATION_KEY_MAP] = value
+  }
+  return seeded
+}
+
+/** Merge the handler's generation settings back onto the V2 context options, under V2's names. */
 export function applyV1ChatParams(event: unknown, output: V1ChatParamsOutput): void {
   if (!isRecord(event)) return
   const base = isRecord(event.options) ? event.options : {}
   const merged: Record<string, unknown> = { ...base }
-  for (const key of GENERATION_KEYS) {
-    const value = output[key]
-    if (typeof value === "number") merged[key] = value
+  for (const [v1Key, v2Key] of Object.entries(GENERATION_KEY_MAP)) {
+    const value = output[v1Key as keyof typeof GENERATION_KEY_MAP]
+    if (typeof value === "number") merged[v2Key] = value
   }
   Object.assign(merged, output.options)
   event.options = merged
