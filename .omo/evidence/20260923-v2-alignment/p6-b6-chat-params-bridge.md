@@ -78,21 +78,25 @@ So a user's `max_tokens` never reaches the delegate model on V1 or V2 alike. Rec
 at the time; **fixed separately in `p6-b8-category-max-tokens.md`** (documented key read first,
 deprecated alias as fallback).
 
-### The `context.options` surface is closed and typed
+### The `context.options` surface is typed, and `reasoningEffort` is one of its fields
 
 The same probe run answered an open question from the earlier generation-options work. Setting
-`reasoning_effort`, `thinking`, `verbosity`, `max_tokens`, `top_k` and a made-up key on
-`event.options` produced a primary body whose only extra top-level keys were the typed ones:
+`reasoning_effort`, `thinking`, `verbosity`, `top_k` and a made-up key on `event.options` produced a
+primary body whose only extra top-level keys were the typed ones:
 
 ```
 typed probe:  {"top_p":0.77,"topP":null,"max_tokens":4321,"temperature":0.33}
-unknown keys: no reasoning_effort / thinking / verbosity / top_k / custom key in the body
+unknown keys: no thinking / verbosity / top_k / custom key in the body
 ```
 
-An earlier `body.includes("reasoning_effort")` hit was a false positive from text inside the system
-prompt, which is why the previous evidence note claimed unknown keys pass through. It does not:
-`context.options` forwards `maxTokens -> max_tokens`, `topP -> top_p`, `temperature` (and the rest of
-the typed set) and drops everything else.
+An earlier `body.includes("reasoning_effort")` hit was dismissed as a false positive from text inside
+the system prompt. That was a mistake in the other direction: the snake spelling really is dropped,
+but the **typed camelCase `reasoningEffort` is honored and lowered to the provider's
+`reasoning_effort`**. `p6-b10-reasoning-effort-channel.md` has the strict re-test (camel only ->
+`"reasoning_effort": "high"` on the wire; snake only -> dropped) and the in-process trace showing
+omo's chain writes it. So the earlier "reasoningEffort has no V2 channel" framing was wrong in the
+mechanism, though right that no effort reaches the wire for the models configured on this machine -
+they all take the declared-variant path instead.
 
 ### The variant write-back is effective
 
