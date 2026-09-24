@@ -22,6 +22,8 @@
 | CLI command reference | [docs/reference/cli.md](reference/cli.md) |
 | Known issues & workarounds | [docs/reference/known-issues.md](reference/known-issues.md) |
 | `prompt_async_gate` deep-dive | [docs/reference/prompt-async-gate-rfc.md](reference/prompt-async-gate-rfc.md) |
+| OpenCode V2 plugin adapter (development guide) | [docs/reference/v2-plugin-adapter.md](reference/v2-plugin-adapter.md) |
+| OpenCode V2 alignment summary | [docs/reference/v2-port-summary.md](reference/v2-port-summary.md) |
 | Shared core multi-PR extraction QA | [docs/reference/shared-core-multi-pr.md](reference/shared-core-multi-pr.md) |
 | Re-export shim inventory | [docs/reference/re-export-shim-inventory.md](reference/re-export-shim-inventory.md) |
 | Release process | [docs/reference/release-process.md](reference/release-process.md) |
@@ -44,7 +46,7 @@ docs/
 ├── manifesto.md                              # The "why" — referenced from README
 ├── model-capabilities-maintenance.md         # How model-capabilities cache is refreshed
 ├── guide/                                    # User-facing tutorial-style guides (6 files)
-├── reference/                                # API / config / CLI reference (15 files)
+├── reference/                                # API / config / CLI reference (17 files)
 ├── examples/                                 # Sample JSONC configs (3 files)
 ├── legal/                                    # privacy-policy.md + terms-of-service.md
 ├── templates/
