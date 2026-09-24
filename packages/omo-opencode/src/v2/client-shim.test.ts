@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 import { createV1ClientShim, resetClientShimWarningsForTesting } from "./client-shim"
 import type { V1ShimClient, V2ClientShimSource } from "./client-shim"
+import { observeSessionActivity, resetSessionActivityForTesting } from "./session-activity"
 
 type Calls = {
   get: Array<Record<string, unknown>>
@@ -205,10 +206,23 @@ describe("createV1ClientShim session domain", () => {
     expect((await client.session.message({})).error).toBeDefined()
   })
 
-  it("returns honest empty stubs for status and todo", async () => {
+  it("reports busy sessions tracked from the host events and keeps an empty todo stub", async () => {
+    // given a shim built over a host that publishes no status domain
     const { source } = createSource()
     const client: V1ShimClient = createV1ClientShim(source)
-    expect(await client.session.status()).toEqual({ data: {} })
+    resetSessionActivityForTesting()
+
+    // when nothing has been observed / a turn is in flight / the turn ended
+    const idle = await client.session.status()
+    observeSessionActivity("session.execution.started", "ses_live")
+    const busy = await client.session.status()
+    observeSessionActivity("session.execution.succeeded", "ses_live")
+    const ended = await client.session.status()
+
+    // then the map tracks the live turn instead of always being empty, and todo stays a stub
+    expect(idle).toEqual({ data: {} })
+    expect(busy).toEqual({ data: { ses_live: { type: "busy" } } })
+    expect(ended).toEqual({ data: {} })
     expect(await client.session.todo({ path: { id: "ses_1" } })).toEqual({ data: [] })
   })
 

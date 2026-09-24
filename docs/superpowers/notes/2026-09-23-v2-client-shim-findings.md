@@ -1,5 +1,11 @@
 # V1 `client` shim from V2 plugin domain APIs — findings (2026-09-23)
 
+> **Superseded in part (2026-09-24).** The denylist counts below are the state at the time of this
+> spike. P6-B2/B3/B4 later unlocked the session, task, monitor and team families, and `status` is no
+> longer an empty stub (it is reconstructed from the host event stream). Current state:
+> `docs/superpowers/plans/2026-09-24-omo-v2-full-parity.md` sections 2 and 3, with evidence under
+> `.omo/evidence/20260923-v2-alignment/`.
+
 > P2.5 pre-work spike. Question: **can a V1-SDK-shaped `client` be reproduced from OpenCode
 > V2's plugin `Context` domains, to unlock the tools currently skipped by
 > `CLIENT_DEPENDENT_TOOLS`?**

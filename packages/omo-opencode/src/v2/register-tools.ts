@@ -17,44 +17,37 @@ type V2Ctx = Parameters<NonNullable<Parameters<typeof Plugin.define>[0]["setup"]
 const NAMESPACE = "omo"
 
 /**
- * Tools that dereference the V1 plugin `client` and have **no usable V2 mapping**, so they stay
- * out of the V2 registry (advertising them would surface a tool that throws or degrades on every
- * call). Everything the shim can serve (`call_omo_agent`, `look_at`, `task`, `background_output`,
- * `background_cancel`, `skill_mcp`) is registered instead — see `createV1ClientShim`.
+ * Tools that dereference a host surface with **no usable V2 mapping**, so they stay out of the V2
+ * registry (advertising them would surface a tool that throws or degrades on every call).
+ * Everything the shim can serve is registered instead — see `createV1ClientShim`.
  *
  * Still excluded:
- * - nothing in the session or task families any more. `session_read`/`session_info` only need one session's
+ * - `skill` — blocked by the V2 ToolContext `ask` gap (fail-closed). The host already ships its own
+ *   `skill` tool, which loads omo-registered skills, so the duplicate stays out deliberately.
+ *
+ * Unlocked, for the record — each of these once looked impossible:
+ * - nothing in the session or task families. `session_read`/`session_info` only need one session's
  *   messages, which the shim serves from `ctx.session.context`. `session_list` and the all-sessions
  *   mode of `session_search` need enumeration, which V2 withholds from server plugins, so they run
  *   against omo's own persisted index (`register-session-index.ts`); without that source they
  *   degrade to "no sessions found" instead of failing.
- * - `task_create`/`task_update` are unlocked: their storage is plain JSON files, and the V1 todo
- *   sync is fail-soft by construction (it reads the shim's empty `session.todo` stub, then cannot
- *   resolve `opencode/session/todo` on V2 and returns). Their list id is pinned per location
- *   because V2 serves many projects from one process - see `withLocationTaskListId`.
- * - `skill` — blocked by the V2 ToolContext `ask` gap (fail-closed), independent of the client.
- * - `monitor_*` are unlocked: their process spawning goes through the repo's own spawn shim, their
- *   output injection goes through the shared prompt gate (which dispatches into the shim), and the
- *   `ctx.ask` bash gate is optional - without it monitor falls back to `monitor.allowed_commands`,
- *   so an enabled monitor needs an explicit allowlist.
- * - `team_*` — every team tool factory receives `ctx.client` and drives tmux/worktree orchestration.
+ * - `task_create`/`task_update`: their storage is plain JSON files, and the V1 todo sync is
+ *   fail-soft by construction (it reads the shim's empty `session.todo` stub, then cannot resolve
+ *   `opencode/session/todo` on V2 and returns). Their list id is pinned per location because V2
+ *   serves many projects from one process - see `withLocationTaskListId`.
+ * - `monitor_*`: process spawning goes through the repo's own spawn shim, output injection goes
+ *   through the shared prompt gate (which dispatches into the shim), and the `ctx.ask` bash gate is
+ *   answered by `v2/ask-resolver.ts` from `monitor.allowed_commands`.
+ * - `team_*`: ten of the twelve factories accept `client` and never read it (`void client`), and
+ *   both real uses are already V2-native. Member sessions spawn through the background manager,
+ *   whose `session.create`/`get`/`abort`/`todo`/`status` calls the shim serves;
+ *   `team_send_message` live delivery goes through the shared prompt gate. tmux layout is a no-op
+ *   unless `tmux_visualization` is enabled, and worktree orchestration is plain git.
  *
  * Client-free tools (`grep`, `glob`, `edit`, `interactive_bash`, goal tools) stay registered.
  */
 export const CLIENT_DEPENDENT_TOOLS: ReadonlySet<string> = new Set([
   "skill",
-  "team_create",
-  "team_delete",
-  "team_shutdown_request",
-  "team_approve_shutdown",
-  "team_reject_shutdown",
-  "team_send_message",
-  "team_task_create",
-  "team_task_list",
-  "team_task_update",
-  "team_task_get",
-  "team_status",
-  "team_list",
 ])
 
 /**
@@ -73,6 +66,18 @@ export const SHIM_UNLOCKED_TOOLS: ReadonlySet<string> = new Set([
   "monitor_stop",
   "monitor_list",
   "monitor_output",
+  "team_create",
+  "team_delete",
+  "team_shutdown_request",
+  "team_approve_shutdown",
+  "team_reject_shutdown",
+  "team_send_message",
+  "team_task_create",
+  "team_task_list",
+  "team_task_update",
+  "team_task_get",
+  "team_status",
+  "team_list",
   "look_at",
   "task",
   "background_output",

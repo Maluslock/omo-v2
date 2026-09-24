@@ -38,6 +38,21 @@ describe("toV1Event", () => {
     })
   })
 
+  it("maps the real V2 turn-end envelope onto V1 session.idle", () => {
+    // V2 never emits `session.idle`; the live catalog capture shows `session.execution.succeeded`
+    // is what ends a turn, so the V1 idle hooks depend on this mapping.
+    expect(toV1Event({ type: "session.execution.succeeded", data: { sessionID: "ses_1" } })).toEqual({
+      event: { type: "session.idle", properties: { sessionID: "ses_1" } },
+    })
+    expect(toV1Event({ type: "session.execution.succeeded", data: {} })).toBeUndefined()
+  })
+
+  it("maps the real V2 compaction end event onto V1 session.compacted", () => {
+    expect(toV1Event({ type: "session.compaction.ended", data: { sessionID: "ses_1" } })).toEqual({
+      event: { type: "session.compacted", properties: { sessionID: "ses_1" } },
+    })
+  })
+
   it("maps both V2 failure events onto V1 session.error with the error payload", () => {
     const error = { name: "ProviderError", message: "boom" }
     for (const type of ["session.execution.failed", "session.step.failed"]) {

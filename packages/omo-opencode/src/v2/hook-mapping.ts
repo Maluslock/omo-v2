@@ -13,7 +13,9 @@ import { isRecord } from "../shared"
  * and is dropped rather than mis-dispatched. The V2 vocabulary is ~130 types (see
  * `docs/superpowers/notes/2026-09-23-v2-hook-injection-findings.md`).
  *
- * Verified against a live `GET /api/event` capture on opencode v2.0.11 for `session.created`;
+ * Verified against a live `GET /api/event` capture on opencode v2.0.11 for `session.created`, and
+ * against a full-catalog live capture for the turn envelope (`live-v2-event-catalog.md`: one prompt
+ * emits `session.execution.started` -> `session.execution.succeeded` and never `session.idle`);
  * the remaining mappings are derived from `@opencode/schema@2.0.11` event definitions and are
  * pinned by unit tests until a live retry/error event can be captured.
  */
@@ -26,6 +28,14 @@ export type V1EventInput = {
 export const V2_EVENT_TO_V1: Readonly<Record<string, string>> = Object.freeze({
   "session.created": "session.created",
   "session.deleted": "session.deleted",
+  // V2 has no `session.idle` (and no `session.status`): a live capture of the whole event catalog
+  // for one prompt shows the turn envelope is `session.execution.started` ->
+  // `session.execution.succeeded`, with no idle event at all. See
+  // `live-v2-event-catalog.md`. Without this mapping every V1 idle-keyed omo hook is dead on V2,
+  // which is why team member status never left `running` and live delivery never fired.
+  "session.execution.succeeded": "session.idle",
+  "session.compaction.ended": "session.compacted",
+  // Kept for hosts that do emit them; harmless when absent.
   "session.idle": "session.idle",
   "session.status": "session.status",
   "session.execution.failed": "session.error",
@@ -60,6 +70,8 @@ function buildProperties(v2Type: string, data: Record<string, unknown>): Record<
       return { info: { id: sessionID } }
     case "session.idle":
     case "session.compacted":
+    case "session.execution.succeeded":
+    case "session.compaction.ended":
       if (sessionID === undefined) return undefined
       return { sessionID }
     case "session.status":

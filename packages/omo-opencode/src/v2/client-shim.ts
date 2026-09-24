@@ -1,6 +1,7 @@
 // packages/omo-opencode/src/v2/client-shim.ts
 import { isRecord, log } from "../shared"
 import { toV1Message, type V1ShimMessage } from "./client-shim-messages"
+import { sessionActivityStatuses } from "./session-activity"
 
 /**
  * V1-client shim reconstructed from OpenCode V2 plugin domain APIs.
@@ -19,7 +20,9 @@ import { toV1Message, type V1ShimMessage } from "./client-shim-messages"
  *   it), so child-session linkage is dropped with a one-time warning.
  * - `session.prompt` accepts no `agent`/`model`/`system`/`tools`/generation params; the shim
  *   maps `agent`/`model` onto `switchAgent`/`switchModel` and warns once about the rest.
- * - `session.status`, `session.todo` have no V2 domain equivalent and are honest empty stubs.
+ * - `session.todo` has no V2 domain equivalent and is an honest empty stub. `session.status` has no
+ *   domain method either, but is reconstructed from the host event stream so the background manager
+ *   does not mistake a live subagent for a gone session (`session-activity.ts`).
  * - `config.get` is an empty stub (V2 has no `config` domain); host-skill resolution falls back.
  * - `tui.showToast` is a logged no-op: V2 exposes no TUI domain to plugins. It must still EXIST,
  *   because `client.tui.showToast(...)` throws while reading `.showToast` off `undefined`, and that
@@ -301,10 +304,11 @@ export function createV1ClientShim(source: V2ClientShimSource): Json {
     messages,
     message,
     abort,
-    // Honest stubs: V2 exposes neither `session.status` nor `session.todo` to plugins. The
-    // background manager treats an empty status map as "not active" and falls back to
-    // message-count stability; the todo check is a no-op.
-    status: async (): Promise<V1ShimResponse<Json>> => ({ data: {} }),
+    // `session.status` is reconstructed from the host event stream (`session.execution.*` plus the
+    // per-step heartbeats) instead of returning an empty map - see `session-activity.ts` for why an
+    // empty map makes the background manager stop live subagents. `session.todo` stays a stub: V2
+    // exposes no todo domain and the manager's todo check is a no-op.
+    status: async (): Promise<V1ShimResponse<Json>> => ({ data: sessionActivityStatuses() }),
     todo: async (): Promise<V1ShimResponse<unknown[]>> => ({ data: [] }),
   }
   // The prompt gate feature-detects `session.prompt` / `session.promptAsync`; only expose them

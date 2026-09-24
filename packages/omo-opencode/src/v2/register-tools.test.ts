@@ -179,8 +179,19 @@ describe("registerOmoTools", () => {
       monitor_stop: fakeTool("monitor_stop"),
       monitor_list: fakeTool("monitor_list"),
       monitor_output: fakeTool("monitor_output"),
-      skill: fakeTool("skill"),
+      team_create: fakeTool("team_create"),
+      team_delete: fakeTool("team_delete"),
+      team_shutdown_request: fakeTool("team_shutdown_request"),
+      team_approve_shutdown: fakeTool("team_approve_shutdown"),
+      team_reject_shutdown: fakeTool("team_reject_shutdown"),
+      team_send_message: fakeTool("team_send_message"),
+      team_task_create: fakeTool("team_task_create"),
+      team_task_list: fakeTool("team_task_list"),
+      team_task_update: fakeTool("team_task_update"),
+      team_task_get: fakeTool("team_task_get"),
+      team_status: fakeTool("team_status"),
       team_list: fakeTool("team_list"),
+      skill: fakeTool("skill"),
     })
 
     await registerOmoTools(createMockCtx(directory, editor), {} as never, deps)
@@ -204,12 +215,24 @@ describe("registerOmoTools", () => {
       "omo_monitor_stop",
       "omo_monitor_list",
       "omo_monitor_output",
+      "omo_team_create",
+      "omo_team_delete",
+      "omo_team_shutdown_request",
+      "omo_team_approve_shutdown",
+      "omo_team_reject_shutdown",
+      "omo_team_send_message",
+      "omo_team_task_create",
+      "omo_team_task_list",
+      "omo_team_task_update",
+      "omo_team_task_get",
+      "omo_team_status",
+      "omo_team_list",
     ])
     for (const name of SHIM_UNLOCKED_TOOLS) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(false)
       expect(editor.get(`omo_${name}`)).toBeDefined()
     }
-    for (const name of ["skill", "team_list", "team_create"]) {
+    for (const name of ["skill"]) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(true)
       expect(editor.get(`omo_${name}`)).toBeUndefined()
       expect(editor.addCalls).not.toContain(`omo_${name}`)

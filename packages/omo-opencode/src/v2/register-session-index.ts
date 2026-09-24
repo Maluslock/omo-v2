@@ -3,6 +3,7 @@ import type { Plugin } from "@opencode/plugin"
 import type { OhMyOpenCodeConfig } from "../config"
 import { isRecord, log } from "../shared"
 import { setSessionIndexSource } from "../tools/session-manager/storage"
+import { observeSessionActivity } from "./session-activity"
 import {
   parseSessionIndex,
   selectSessionIndexEntries,
@@ -177,6 +178,9 @@ export async function registerOmoSessionIndex(
           const event = isRecord(raw) ? raw : undefined
           const sessionID = sessionIDOf(event?.data)
           if (sessionID === undefined) continue
+          // The activity tracker rides this subscription rather than opening a third event stream:
+          // it needs exactly the same (event type, sessionID) pair this loop already extracts.
+          if (typeof event?.type === "string") observeSessionActivity(event.type, sessionID)
           recordSession(sessionID, directoryOf(event?.location))
         }
       } catch (error) {

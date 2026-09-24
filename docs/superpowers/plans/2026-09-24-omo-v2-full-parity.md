@@ -51,6 +51,7 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 | `tool.execute.before/after` | `tool.hook("execute.before/after")` | done |
 | `experimental.session.compacting` | `session.hook("compaction")` | done |
 | `event` | `ctx.event.subscribe` | done |
+| `event` **vocabulary** | **DONE after a full-catalog live capture**: V2 never emits `session.idle`, `session.status` or `session.compacted` - the turn envelope is `session.execution.started` -> `session.execution.succeeded`, and compaction ends with `session.compaction.ended`. `hook-mapping.ts` now maps those onto the V1 names, which is what makes every idle-keyed hook fire (it was the reason team member status never left `running` and live delivery never triggered). `failed`/`interrupted` are deliberately not mapped to idle. | **P6-B5 done** |
 | `chat.headers` (Copilot `x-initiator`) | **DONE**: `session.hook("model.request")` (official mapping) runs the unchanged V1 handler; the prompt `messageID` is remembered from the `prompt` hook because V2 puts no message on `model.request`, and the shim's `session.message` resolves it. Auxiliary kinds are skipped. End-to-end verified with a local HTTP sink: primary requests carry `x-initiator: agent` exactly when the internal marker is present. Copilot-only, so no runtime effect on this machine. | **P5-A1 done** |
 | `chat.params` scalars | `ctx.session.hook("context")` -> `event.options` (official mapping) | **done for the keys**: V1 `maxOutputTokens` was written verbatim and V2 only knows `maxTokens`, so the max-output clamp silently did nothing; the bridge now maps keys both ways and seeds the V1 view from live V2 options. Live probe shows `options.maxTokens`/`temperature` reaching the provider body. |
 | `chat.params` agent variant | applied at **agent registration** (`resolveModelVariant` -> agent `model.variant`), which all of this machine's models support via declared variants | done |
@@ -71,7 +72,8 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 | `skill` | the V2 host's own `skill` tool loads omo-registered skills (live-verified), and every omo `ask` site is optional (`ctx?.ask`), so nothing is blocked. Registering omo's would add a duplicate namespaced tool that bypasses the host's permission flow; the two real deltas (slash-command execution, `definition.agent` restriction) are recorded instead. | **P5-A3 assessed: no change** |
 | `task_create` / `task_get` / `task_list` / `task_update` | **DONE**: they only needed unblocking - storage is plain JSON files and `todo-sync` is fail-soft (the shim's empty todo stub plus an unresolvable `opencode/session/todo`). Two live-probe fixes came with it: the task list id now follows `ctx.location.directory` (one V2 server serves many projects) and `acquireLockAsync` waits for the file lock so parallel task writes stop failing. Off by default (`experimental.task_system ?? false`). Also wired the long-dead `task-reminder` hook (it had tests but was referenced nowhere) so the model is nudged after 10 non-task tool calls; `task-reminder` is now in `HookNameSchema`. | **P6-B2 done** |
 | `monitor_*` | **DONE**: no rewrite was needed - the manager spawns its own processes and injects output through the shared prompt gate, which already targets the V2 shim. The only blocker was `ctx.ask`; `v2/ask-resolver.ts` now answers it from `monitor.allowed_commands`. Live-proved on the isolated host: `monitor_start` (id `mon_3664dc99`) -> `monitor_output` returned all 3 `MONITOR_LINE_*` lines -> `monitor_stop`, plus the deferred delivery path (`source: "monitor-output:mon_3664dc99:batch-2"`). Off by default (`monitor.enabled`); needs an explicit `allowed_commands` when enabled. | **P6-B3 done** |
-| `team_*` (12) | runtime primitives are harness-neutral (`packages/team-core`); the missing link is "spawn member session + send prompt + read result", and **`ctx.session.create/prompt/context` all exist**. Worktree orchestration can use `ctx.worktree`, git probes `ctx.vcs`. | **P6-B4 (rewrite, largest)** |
+| `team_*` (12) | **DONE - and the block was never real.** Ten of the twelve factories take `client` and immediately `void client`; the two real uses are V2-native (`team_create` -> background manager, served by the shim; `team_send_message` live delivery -> shared prompt gate). tmux layout is a no-op unless `tmux_visualization` is on, and worktrees are plain git. Live-proved end to end: create (real member session `ses_f2db52673ffe...` spawned and prompted), status, message with live delivery, task CRUD, delete; the member replied `PROBE_WORKER_OK` and received an injected `<peer_message>`. The probe is what exposed the two V2 gaps below. | **P6-B4 done** |
+| background subagent liveness (`client.session.status`) | **DONE**: V2 has no status domain, so the shim used to return an empty map - which the manager reads as "every session is gone" and stops a live subagent after ~9s (observed: a team member aborted mid-turn while `sessionStatus` was unresolvable). `v2/session-activity.ts` rebuilds the map from the turn envelope plus per-step/delta heartbeats, reports only busy sessions, and bounds itself with a 90s staleness TTL and a 500-entry cap. Rerun shows `"sessionStatus":"busy"` holding the task open until the member's turn actually ends. | **P6-B5 done** |
 
 ### Other
 
@@ -99,15 +101,15 @@ service -> evidence under `.omo/evidence/20260923-v2-alignment/` -> commit.
 5. **P5-A4** shell guards — assessed, nothing to port (omo's env work rides `tool.execute.before`).
 6. **P5-A7** connected providers — assessed with live data, stays unimplemented (the integration
    connection API is not a usability signal, and the fail-open fallback already yields the right set).
-7. **P6-B2** task tools and **P6-B3** monitor - both done. **P6-B4** team runtime remains (largest; team last). All three are rewrites on
-   V2-native domains rather than ports: `ctx.session.create/prompt/context` for member sessions,
-   `ctx.worktree`/`ctx.vcs` for git orchestration, `ctx.storage` for the task/mailbox state
-   (`ctx.generate.text` is also available for judge/summarize steps).
-8. **P6-B1** session index for `session_list/search/info` (storage-backed; indexes sessions observed
+7. **P6-B2** task tools, **P6-B3** monitor, **P6-B4** team runtime and **P6-B5** the two gaps the team
+   probe exposed (background liveness, the V1 idle mapping) - all done. The remaining V2-native work is
+   `ctx.generate.text` for judge/summarize steps, `ctx.worktree`/`ctx.vcs` for non-team git
+   orchestration, and `ctx.storage` for anything currently file-backed.
+9. **P6-B1** session index for `session_list/search/info` (storage-backed; indexes sessions observed
    from load time, no backfill), and a TUI companion if exact/backfilled enumeration is required.
-8. **P6-C1** build/publish path - local build resolved and verified; publishing itself untouched.
-9. **P5-A6** `tool.definition` — assessed, no target tool on V2 (the description belongs to the
-   re-implemented task tool if P6-B2 lands).
+10. **P6-C1** build/publish path - local build resolved and verified; publishing itself untouched.
+11. **P5-A6** `tool.definition` — assessed, no target tool on V2 (the description belongs to the
+    re-implemented task tool now that P6-B2 landed).
 
 ## 4. Verification requirements (hardening after the tool-turn bug)
 
