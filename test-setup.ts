@@ -57,6 +57,12 @@ const HERMETIC_HOME = mkdtempSync(join(tmpdir(), "omo-test-home-"))
 process.env.HOME = HERMETIC_HOME
 process.env.USERPROFILE = HERMETIC_HOME
 
+// Session enumeration reads the host's SQLite store (`session-manager/sqlite-storage.ts`), whose
+// default path resolves through os.homedir() and therefore ignores the hermetic HOME above. Point it
+// inside that temp dir so suites never see the developer's real sessions; a test that wants a store
+// creates one and sets OMO_SESSION_DB_PATH itself.
+process.env.OMO_SESSION_DB_PATH = join(HERMETIC_HOME, "no-session-store", "opencode.db")
+
 let isGlobalMockCleanup = false
 const { restoreModuleMocks } = installModuleMockLifecycle(mock, {
   shouldPreserveActiveMocksOnRestore: () => isGlobalMockCleanup,
