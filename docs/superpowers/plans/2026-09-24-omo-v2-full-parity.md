@@ -57,7 +57,7 @@ synthetic, interrupt, update, move, wait, context`), and there is no `session.sk
 | `chat.params` `reasoningEffort` fallback (models with no declared variants) | no V2 home yet: V1 wrote it onto the mutable `input.message`, which V2 does not have | **open (small)** |
 | `permission` (V1 `ctx.ask`) | `permission.hook("evaluate")` + `permission.list/get/reply`. **No consumer today**: both `ask` sites are optional and the only bash-ask tool (`monitor_*`) is unported. Use it when an ask-gated tool lands (P6-B3). | **P5-A3 assessed: no change** |
 | shell guards (`interactive_bash`, bash read guard) | `shell.hook("create.before")` | **P5-A4** |
-| `experimental.compaction.autocontinue` | `session.hook("compaction")` output + post-compaction prompt via the gate | **P5-A5** |
+| `experimental.compaction.autocontinue` | **DONE for the omo-owned half**: `session.compaction.ended` (V2 has these events) drives `compactionContextInjector.restore` + `compactionTodoPreserver.restore` with V1's duplicate guard. The host question (`output.enabled`) has no V2 home, and V2 was measured NOT to resume an idle compacted turn; injecting a continuation prompt is deliberately skipped until mid-turn compaction is measured. | **P5-A5 done (mid-turn question open)** |
 | `tool.definition` (todo description override) | candidates: `aisdk.hook("language")` tool list rewrite, or `session.hook("http.request")` body patch | **P5-A6, low value, verify or record as unportable** |
 | `command.execute.before` (auto-slash-command interception) | none needed: commands are now real V2 commands; the V1 interception only existed because V1 could not register commands | **closed** |
 
@@ -94,7 +94,8 @@ service -> evidence under `.omo/evidence/20260923-v2-alignment/` -> commit.
 3. **P5-A3** `permission` — assessed, no change needed (see the evidence note); the hook is the
    mechanism to use when an ask-gated tool is ported, and omo's `skill` tool stays unregistered in
    favour of the host's.
-4. **P5-A5** `compaction.autocontinue`.
+4. **P5-A5** `compaction.autocontinue` — done for the state restore; the mid-turn continuation
+   question needs a measurement before any prompt injection is added.
 5. **P5-A4** shell guards.
 6. **P5-A7** connected providers via `integration.connection`.
 7. **P6-B2/B3/B4** task store, monitor, team runtime (largest; team last). All three are rewrites on

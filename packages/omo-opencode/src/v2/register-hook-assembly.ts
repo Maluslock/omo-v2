@@ -7,6 +7,7 @@ import { createPluginInterface } from "../plugin-interface"
 import { createSessionCompactingHandler } from "../plugin/session-compacting"
 import { log } from "../shared"
 import { createFirstMessageVariantGate } from "../shared/first-message-variant"
+import { startCompactionEndRestore, type CompactionRestoreHooks } from "./compaction-end-restore"
 import { startV2EventSubscription } from "./event-subscription"
 import {
   registerOmoCompactionHook,
@@ -133,6 +134,26 @@ function registerEventStream(
   disposals.push(() => subscription.dispose())
 }
 
+/**
+ * Run omo's post-compaction state restore off `session.compaction.ended`.
+ *
+ * V1 received this through `experimental.compaction.autocontinue`, which V2 does not have. The hook
+ * has no place to answer "resume the turn", so only the omo-owned state work moved.
+ */
+function registerCompactionEndRestore(
+  ctx: V2Ctx,
+  disposals: Array<() => Promise<void>>,
+  hooks: CompactionRestoreHooks,
+): void {
+  const event = ctx.event
+  if (typeof event?.subscribe !== "function") return
+  const subscription = startCompactionEndRestore({
+    subscribe: (options) => event.subscribe(options) as AsyncIterable<unknown>,
+    hooks,
+  })
+  disposals.push(() => subscription.dispose())
+}
+
 /** Register omo's hooks on the V2 domains. Idempotent per `(directory, context, config)`. */
 export async function registerOmoHooks(
   ctx: V2Ctx,
@@ -187,6 +208,7 @@ export async function registerOmoHooks(
 
   const disposals: Array<() => Promise<void>> = []
   registerEventStream(ctx, disposals, handlers)
+  registerCompactionEndRestore(ctx, disposals, hooks)
   await registerToolHooks(ctx, disposals, handlers)
   await registerSessionHooks(ctx, disposals, handlers, createCompactingFn(hooks))
   disposals.push(async () => hooks.disposeHooks())

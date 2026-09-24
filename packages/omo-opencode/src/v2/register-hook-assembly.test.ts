@@ -90,11 +90,12 @@ beforeEach(() => {
 })
 
 describe("registerOmoHooks", () => {
-  it("registers the event stream, both tool hooks and the three session hooks", async () => {
+  it("registers the event stream, the compaction-end restore, both tool hooks and the session hooks", async () => {
     const { calls, deps, makeCtx } = createFixture()
     await registerOmoHooks(makeCtx("/work") as never, {} as never, deps)
 
-    expect(calls.subscribe).toBe(1)
+    // two subscriptions: the V1 event dispatch, and the compaction-end state restore
+    expect(calls.subscribe).toBe(2)
     expect(calls.toolHooks).toEqual(["execute.before", "execute.after"])
     expect(calls.sessionHooks).toEqual(["prompt", "context", "context", "context", "compaction"])
     expect(calls.createdPluginInterfaces).toBe(1)
@@ -106,7 +107,7 @@ describe("registerOmoHooks", () => {
     await registerOmoHooks(ctx as never, {} as never, deps)
     await registerOmoHooks(ctx as never, {} as never, deps)
 
-    expect(calls.subscribe).toBe(1)
+    expect(calls.subscribe).toBe(2)
     expect(calls.toolHooks).toHaveLength(2)
     expect(calls.sessionHooks).toHaveLength(5)
     expect(calls.createdPluginInterfaces).toBe(1)
