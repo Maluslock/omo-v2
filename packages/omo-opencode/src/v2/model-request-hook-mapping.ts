@@ -11,9 +11,15 @@ import { isRecord } from "../shared"
  * baseURL, headers}` — while `SessionContext` does carry `options`. So the settings are bridged
  * onto the `context` hook, where they reach the request.
  *
- * `input.message` has no V2 counterpart, which matters: omo's `applyAgentVariant` reads
- * `message.variant`. That half is reported through `onUnmapped` instead of being dropped
- * silently. `chat.headers` is deliberately not bridged at all: its gate needs the user
+ * `input.message` has no V2 counterpart, but the V1 handler *requires* a message record
+ * (`buildChatParamsInput` rejects an input without one), so the bridge synthesizes it from
+ * `event.model.variant`. Without that the whole V1 chain - per-session prompt params stored by the
+ * background manager and delegate-task, plus the model-capability clamp - silently did nothing on
+ * V2. The handler can also lower the variant; the result is written back onto `event.model.variant`,
+ * which may be read-only on the host, so the fallback path (`options.reasoningEffort`) is what the
+ * bridge relies on for models that declare no variants.
+ *
+ * `chat.headers` is deliberately not bridged at all: its gate needs the user
  * message's `id` and `role`, which `SessionModelRequest` does not carry, so it would always
  * no-op (see the P3 findings).
  */
@@ -23,6 +29,7 @@ export type V1ChatParamsInput = {
   agent?: string
   model: { providerID: string; modelID: string }
   provider: { id: string }
+  message: { variant?: string }
 }
 export type V1ChatParamsOutput = {
   temperature?: number
@@ -64,6 +71,11 @@ export function toV1ChatParams(
       ...(typeof event.agent === "string" ? { agent: event.agent } : {}),
       model: { providerID, modelID },
       provider: { id: providerID },
+      // The V1 handler refuses an input without a message record, and V2 has no request message: the
+      // only thing to carry over is the host's current variant for this request.
+      message: {
+        ...(typeof model?.variant === "string" ? { variant: model.variant } : {}),
+      },
     },
     // Seed the V1 scalars from the current V2 options so omo's chain sees the live values, the way
     // V1 handlers received the host's current params rather than an empty object.
@@ -84,8 +96,18 @@ export function seedV1GenerationFromV2Options(options: Record<string, unknown>):
   return seeded
 }
 
-/** Merge the handler's generation settings back onto the V2 context options, under V2's names. */
-export function applyV1ChatParams(event: unknown, output: V1ChatParamsOutput): void {
+/**
+ * Merge the handler's generation settings back onto the V2 context options, under V2's names.
+ *
+ * `input` is optional so the options half stays usable on its own; pass it to also propagate the
+ * variant the handler lowered. The host may treat `event.model` as read-only, in which case the
+ * assignment is a silent no-op and the `options.reasoningEffort` fallback is the effective path.
+ */
+export function applyV1ChatParams(
+  event: unknown,
+  output: V1ChatParamsOutput,
+  input?: V1ChatParamsInput,
+): void {
   if (!isRecord(event)) return
   const base = isRecord(event.options) ? event.options : {}
   const merged: Record<string, unknown> = { ...base }
@@ -95,4 +117,14 @@ export function applyV1ChatParams(event: unknown, output: V1ChatParamsOutput): v
   }
   Object.assign(merged, output.options)
   event.options = merged
+
+  if (input === undefined) return
+  const model = isRecord(event.model) ? event.model : undefined
+  if (model === undefined) return
+  const variant = input.message.variant
+  if (variant === undefined) {
+    if ("variant" in model) delete model.variant
+    return
+  }
+  if (model.variant !== variant) model.variant = variant
 }

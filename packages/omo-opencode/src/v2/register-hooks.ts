@@ -238,27 +238,21 @@ export type V1ChatParamsHandler = (
  * docs "Migrate request hooks"), which is what this does. `chat.headers` maps to
  * `ctx.session.hook("model.request", ...)` (or `http.request`) and is a separate registration.
  *
- * The agent's reasoning/variant is NOT applied here: V2 lowers it when the agent is registered
- * (`resolveModelVariant` in `agent-mapping.ts` sets the agent's `model.variant`), and V1's
- * `applyAgentVariant` needs a mutable `input.message` that V2 does not have. The remaining V1-only
- * path is the `reasoningEffort` fallback for models that declare no variants; it is recorded in the
- * parity plan rather than guessed at here.
+ * The agent's reasoning/variant is ALSO applied at agent registration (`resolveModelVariant` in
+ * `agent-mapping.ts` sets the agent's `model.variant`). The request-time path runs here too: the
+ * bridge synthesizes the `message` record the V1 handler requires from the host's current variant,
+ * so `applyAgentVariant` and the `reasoningEffort` fallback for models with no declared variants
+ * both work. The lowered variant is written back onto `event.model.variant`, which the host may
+ * ignore; `options.reasoningEffort` is the path that always reaches the request.
  */
 export async function registerOmoModelRequestHook(
   registrar: V2SessionHookRegistrar,
   handler: V1ChatParamsHandler,
 ): Promise<HookRegistration> {
-  let reportedVariantGap = false
   return registrar("context", async (event) => {
     const pair = toV1ChatParams(event)
     if (pair === undefined) return
     await handler(pair.input, pair.output)
-    applyV1ChatParams(event, pair.output)
-    if (!reportedVariantGap) {
-      reportedVariantGap = true
-      log("[v2] chat.params: agent reasoning/variant is applied at agent registration; V2 has no mutable input.message for the request-time variant path", {
-        sessionID: pair.input.sessionID,
-      })
-    }
+    applyV1ChatParams(event, pair.output, pair.input)
   })
 }

@@ -13,16 +13,27 @@ const CONTEXT_EVENT = {
 }
 
 describe("toV1ChatParams", () => {
-  it("projects the model/provider ref and the current options", () => {
+  it("projects the model/provider ref, the current options and the synthesised message", () => {
     expect(toV1ChatParams(CONTEXT_EVENT)).toEqual({
       input: {
         sessionID: "ses_1",
         agent: "sisyphus",
         model: { providerID: "anthropic", modelID: "sonnet" },
         provider: { id: "anthropic" },
+        // V2 has no request message; the host's current variant is the only carry-over, and the V1
+        // handler rejects an input without a message record.
+        message: {},
       },
       output: { options: { existing: true } },
     })
+  })
+
+  it("seeds the message variant from the host model", () => {
+    const pair = toV1ChatParams({
+      ...CONTEXT_EVENT,
+      model: { id: "sonnet", providerID: "anthropic", variant: "high" },
+    })
+    expect(pair?.input.message).toEqual({ variant: "high" })
   })
 
   it("returns undefined when the model ref is incomplete", () => {
@@ -85,5 +96,37 @@ describe("applyV1ChatParams", () => {
     applyV1ChatParams(event, { options: { reasoningEffort: "low" } })
     expect(event.options).toEqual({ reasoningEffort: "low" })
     expect(() => applyV1ChatParams(null, { options: {} })).not.toThrow()
+  })
+
+  it("writes a variant the handler lowered back onto the host model", () => {
+    // given a request whose host variant starts as the model default
+    const event = structuredClone(CONTEXT_EVENT) as Record<string, unknown>
+    ;(event.model as Record<string, unknown>).variant = "default"
+    const pair = toV1ChatParams(event)!
+    pair.input.message.variant = "high"
+
+    // when / then the lowered variant is propagated back to the event
+    applyV1ChatParams(event, pair.output, pair.input)
+    expect((event.model as Record<string, unknown>).variant).toBe("high")
+  })
+
+  it("drops the host variant when the handler lowered it away", () => {
+    const event = structuredClone(CONTEXT_EVENT) as Record<string, unknown>
+    ;(event.model as Record<string, unknown>).variant = "default"
+    const pair = toV1ChatParams(event)!
+    delete pair.input.message.variant
+
+    applyV1ChatParams(event, pair.output, pair.input)
+    expect(event.model).not.toHaveProperty("variant")
+  })
+
+  it("leaves the host model alone when the variant is unchanged or input is omitted", () => {
+    const event = structuredClone(CONTEXT_EVENT) as Record<string, unknown>
+    ;(event.model as Record<string, unknown>).variant = "default"
+    const pair = toV1ChatParams(event)!
+
+    applyV1ChatParams(event, pair.output, pair.input)
+    applyV1ChatParams(event, pair.output)
+    expect((event.model as Record<string, unknown>).variant).toBe("default")
   })
 })
