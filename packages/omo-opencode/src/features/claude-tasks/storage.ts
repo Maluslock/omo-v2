@@ -103,6 +103,29 @@ export function listTaskFiles(config: Partial<OhMyOpenCodeConfig> = {}): string[
     .map((f) => f.replace('.json', ''))
 }
 
+/**
+ * Wait for the file lock instead of failing on first contention.
+ *
+ * `acquireLock` makes exactly one retry, so two task writes issued in the same assistant message
+ * race and the loser returns `task_lock_unavailable` (observed live: the model created two tasks in
+ * parallel and had to retry one). The lock itself stays the cross-process guard; this only adds a
+ * bounded async wait so parallel callers queue up instead of failing.
+ */
+export async function acquireLockAsync(
+  dirPath: string,
+  options: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<{ acquired: boolean; release: () => void }> {
+  const timeoutMs = options.timeoutMs ?? 2_000
+  const intervalMs = options.intervalMs ?? 25
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const lock = acquireLock(dirPath)
+    if (lock.acquired) return lock
+    if (Date.now() >= deadline) return lock
+    await new Promise<void>((resolve) => setTimeout(resolve, intervalMs))
+  }
+}
+
 export function acquireLock(dirPath: string): { acquired: boolean; release: () => void } {
   const lockPath = join(dirPath, ".lock")
   const lockId = randomUUID()

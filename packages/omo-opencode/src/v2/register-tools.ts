@@ -1,4 +1,5 @@
 // packages/omo-opencode/src/v2/register-tools.ts
+import { basename } from "node:path"
 import type { Plugin } from "@opencode/plugin"
 import type { OhMyOpenCodeConfig } from "../config"
 import { createManagers } from "../create-managers"
@@ -21,12 +22,15 @@ const NAMESPACE = "omo"
  * `background_cancel`, `skill_mcp`) is registered instead — see `createV1ClientShim`.
  *
  * Still excluded:
- * - nothing in the session family any more. `session_read`/`session_info` only need one session's
+ * - nothing in the session or task families any more. `session_read`/`session_info` only need one session's
  *   messages, which the shim serves from `ctx.session.context`. `session_list` and the all-sessions
  *   mode of `session_search` need enumeration, which V2 withholds from server plugins, so they run
  *   against omo's own persisted index (`register-session-index.ts`); without that source they
  *   degrade to "no sessions found" instead of failing.
- * - `task_create`/`task_update` — `todo-sync` reads `ctx.client.session.todo`; V2 removed todos.
+ * - `task_create`/`task_update` are unlocked: their storage is plain JSON files, and the V1 todo
+ *   sync is fail-soft by construction (it reads the shim's empty `session.todo` stub, then cannot
+ *   resolve `opencode/session/todo` on V2 and returns). Their list id is pinned per location
+ *   because V2 serves many projects from one process - see `withLocationTaskListId`.
  * - `skill` — blocked by the V2 ToolContext `ask` gap (fail-closed), independent of the client.
  * - `monitor_*` — the monitor manager is constructed around a client surface V2 lacks.
  * - `team_*` — every team tool factory receives `ctx.client` and drives tmux/worktree orchestration.
@@ -34,8 +38,6 @@ const NAMESPACE = "omo"
  * Client-free tools (`grep`, `glob`, `edit`, `interactive_bash`, goal tools) stay registered.
  */
 export const CLIENT_DEPENDENT_TOOLS: ReadonlySet<string> = new Set([
-  "task_create",
-  "task_update",
   "skill",
   "monitor_start",
   "monitor_stop",
@@ -65,6 +67,8 @@ export const SHIM_UNLOCKED_TOOLS: ReadonlySet<string> = new Set([
   "session_list",
   "session_search",
   "session_info",
+  "task_create",
+  "task_update",
   "look_at",
   "task",
   "background_output",
@@ -235,6 +239,34 @@ export function omoRuntimeKeyFor(ctx: V2Ctx, pluginConfig: OhMyOpenCodeConfig): 
 }
 
 /** Resolve the runtime for a V2 context, creating the client shim and generation key. */
+/**
+ * Pin the task store to the session's project.
+ *
+ * `getTaskDir` falls back to `<opencode config dir>/tasks/<basename(process.cwd())>` when no list id
+ * is configured. That was fine for a per-project V1 process, but V2 serves every project location
+ * from one process, so the fallback would mix all projects into a single task list. When the user
+ * has not chosen an id (and no env override is set), derive it from the location instead; an explicit
+ * `sisyphus.tasks.task_list_id`, `sisyphus.tasks.storage_path` or `ULTRAWORK_TASK_LIST_ID` still wins.
+ */
+export function withLocationTaskListId(
+  config: OhMyOpenCodeConfig,
+  directory: string,
+): OhMyOpenCodeConfig {
+  if (typeof config.sisyphus?.tasks?.task_list_id === "string" && config.sisyphus.tasks.task_list_id.trim().length > 0) {
+    return config
+  }
+  if (typeof process.env.ULTRAWORK_TASK_LIST_ID === "string" && process.env.ULTRAWORK_TASK_LIST_ID.trim().length > 0) {
+    return config
+  }
+  const listId = basename(directory)
+  if (listId.length === 0) return config
+  const tasks = config.sisyphus?.tasks
+  return {
+    ...config,
+    sisyphus: { ...config.sisyphus, tasks: { ...(tasks ?? { claude_code_compat: true }), task_list_id: listId } },
+  }
+}
+
 export async function resolveOmoRuntime(
   ctx: V2Ctx,
   pluginConfig: OhMyOpenCodeConfig,
@@ -246,7 +278,7 @@ export async function resolveOmoRuntime(
   // contravariant parameter checking rejects against the structural shim type; the runtime shape
   // is pinned by `client-shim.test.ts` and the P2.5 probe, so bridge the declarations here.
   const client = createV1ClientShim(ctx as unknown as V2ClientShimSource)
-  return loadOmoRuntime(directory, pluginConfig, client, contextGeneration(ctx), resolvedDeps)
+  return loadOmoRuntime(directory, withLocationTaskListId(pluginConfig, directory), client, contextGeneration(ctx), resolvedDeps)
 }
 
 /** Test seam: clears the memoized runtime (production never calls this). */

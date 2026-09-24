@@ -1,0 +1,15 @@
+# Full suite after the task-tool port (2026-09-24)
+
+ 12898 pass
+ 3 skip
+ 13 fail
+Ran 12914 tests across 1695 files. [282.37s]
+Full log: full-test-tasks.log   (+6 tests: 4 task-list-id cases, 2 lock cases)
+
+13 failures, same count as the previous run. One entry swapped: 'Codex installer version
+sync' passed this time while 'GPT Mini reference audit' failed; both pass standalone
+(verified), so they are the known full-suite isolation flakes, not regressions.
+
+Note for future builds: 'OMO_SKIP_MATERIALIZE=1 bun run build' also rewrites
+packages/omo-codex/scripts/install-dist/install-local.mjs with a different key order inside a
+vendored bundle. That is cosmetic bundling nondeterminism and was reverted, not committed.

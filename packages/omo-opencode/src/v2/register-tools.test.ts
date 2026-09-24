@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { z } from "zod"
 import {
+  withLocationTaskListId,
   CLIENT_DEPENDENT_TOOLS,
   SHIM_UNLOCKED_TOOLS,
   registerOmoTools,
@@ -172,6 +173,8 @@ describe("registerOmoTools", () => {
       session_list: fakeTool("session_list"),
       session_search: fakeTool("session_search"),
       session_info: fakeTool("session_info"),
+      task_create: fakeTool("task_create"),
+      task_update: fakeTool("task_update"),
       skill: fakeTool("skill"),
       team_list: fakeTool("team_list"),
     })
@@ -191,12 +194,14 @@ describe("registerOmoTools", () => {
       "omo_session_list",
       "omo_session_search",
       "omo_session_info",
+      "omo_task_create",
+      "omo_task_update",
     ])
     for (const name of SHIM_UNLOCKED_TOOLS) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(false)
       expect(editor.get(`omo_${name}`)).toBeDefined()
     }
-    for (const name of ["skill", "team_list", "task_create"]) {
+    for (const name of ["skill", "team_list", "monitor_start"]) {
       expect(CLIENT_DEPENDENT_TOOLS.has(name)).toBe(true)
       expect(editor.get(`omo_${name}`)).toBeUndefined()
       expect(editor.addCalls).not.toContain(`omo_${name}`)
@@ -337,5 +342,35 @@ describe("resolveOmoRuntime", () => {
     await resolveOmoRuntime(createMockCtx(directory, editor) as never, {} as never, deps)
 
     expect(getManagerCalls()).toBe(2)
+  })
+})
+
+describe("withLocationTaskListId", () => {
+  it("pins the task list to the session's project when the user set no id", () => {
+    // given / when
+    const config = withLocationTaskListId({} as never, "/home/user/projects/my-app")
+
+    // then
+    expect(config.sisyphus?.tasks?.task_list_id).toBe("my-app")
+  })
+
+  it("keeps an explicit task_list_id", () => {
+    const config = { sisyphus: { tasks: { task_list_id: "chosen" } } }
+    expect(withLocationTaskListId(config as never, "/work/other").sisyphus?.tasks?.task_list_id).toBe("chosen")
+  })
+
+  it("defers to the environment override", () => {
+    const previous = process.env.ULTRAWORK_TASK_LIST_ID
+    process.env.ULTRAWORK_TASK_LIST_ID = "from-env"
+    try {
+      expect(withLocationTaskListId({} as never, "/work/other").sisyphus?.tasks?.task_list_id).toBeUndefined()
+    } finally {
+      if (previous === undefined) delete process.env.ULTRAWORK_TASK_LIST_ID
+      else process.env.ULTRAWORK_TASK_LIST_ID = previous
+    }
+  })
+
+  it("leaves the config alone when the directory has no basename", () => {
+    expect(withLocationTaskListId({} as never, "/").sisyphus).toBeUndefined()
   })
 })
