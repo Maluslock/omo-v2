@@ -82,13 +82,14 @@ createHooks()
   │   │                             noHephaestusNonGpt, hephaestusAgentsMdInjector,
   │   │                             questionLabelTruncator, taskResumeInfo,
   │   │                             runtimeFallback, legacyPluginToast
-  │   ├─ createToolGuardHooks()   # 17 [+1 with team-mode]: commentChecker, toolOutputTruncator,
+  │   ├─ createToolGuardHooks()   # 18 [+1 with team-mode]: commentChecker, toolOutputTruncator,
   │   │                             directoryAgentsInjector, directoryReadmeInjector,
   │   │                             emptyTaskResponseDetector, rulesInjector, tasksTodowriteDisabler,
   │   │                             writeExistingFileGuard, bashFileReadGuard, hashlineReadEnhancer,
   │   │                             jsonErrorRecovery, readImageResizer, todoDescriptionOverride,
   │   │                             webfetchRedirectGuard, fsyncSkipWarning,
-  │   │                             notepadWriteGuard, planFormatValidator [+ teamToolGating]
+  │   │                             notepadWriteGuard, planFormatValidator, taskReminder
+  │   │                             [+ teamToolGating]
   │   └─ createTransformHooks()   # 4 [+2 with team-mode]: claudeCodeHooks, keywordDetector,
   │                                  contextInjectorMessagesTransform,
   │                                  toolPairValidator [+ teamModeStatusInjector, teamMailboxInjector]
@@ -102,7 +103,7 @@ createHooks()
     team-member-error-handler, team-member-status-handler
 ```
 
-Total: 53 base, 60 with team-mode. Each tier produces an object whose values are `(input, output) => void` handlers; the matching OpenCode handler invokes them in registration order via `safeHook()` wrappers.
+Total: 54 base, 61 with team-mode. Each tier produces an object whose values are `(input, output) => void` handlers; the matching OpenCode handler invokes them in registration order via `safeHook()` wrappers.
 
 ## SUBSYSTEM INVENTORY
 

@@ -45,6 +45,7 @@ export { createEditErrorRecoveryHook } from "./edit-error-recovery";
 
 export { createPrometheusMdOnlyHook } from "./prometheus-md-only";
 export { createSisyphusJuniorNotepadHook } from "./sisyphus-junior-notepad";
+export { createTaskReminderHook } from "./task-reminder";
 export { createTaskResumeInfoHook } from "./task-resume-info";
 export { createStartWorkHook } from "./start-work";
 export { createAtlasHook } from "./atlas";

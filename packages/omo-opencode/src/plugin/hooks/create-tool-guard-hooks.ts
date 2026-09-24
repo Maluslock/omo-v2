@@ -21,6 +21,7 @@ import {
   createFsyncSkipWarningHook,
   createNotepadWriteGuardHook,
   createPlanFormatValidatorHook,
+  createTaskReminderHook,
 } from "../../hooks"
 import {
   getOpenCodeVersion,
@@ -44,6 +45,7 @@ export type ToolGuardHooks = {
   jsonErrorRecovery: ReturnType<typeof createJsonErrorRecoveryHook> | null
   readImageResizer: ReturnType<typeof createReadImageResizerHook> | null
   todoDescriptionOverride: ReturnType<typeof createTodoDescriptionOverrideHook> | null
+  taskReminder: ReturnType<typeof createTaskReminderHook> | null
   webfetchRedirectGuard: ReturnType<typeof createWebFetchRedirectGuardHook> | null
   fsyncSkipWarning: ReturnType<typeof createFsyncSkipWarningHook> | null
   teamToolGating: ReturnType<typeof createTeamToolGating> | null
@@ -125,6 +127,10 @@ export function createToolGuardHooks(args: {
     ? safeHook("hashline-read-enhancer", () => createHashlineReadEnhancerHook(ctx, { hashline_edit: { enabled: pluginConfig.hashline_edit ?? false } }))
     : null
 
+  const taskReminder = isHookEnabled("task-reminder")
+    ? safeHook("task-reminder", () => createTaskReminderHook(ctx))
+    : null
+
   const jsonErrorRecovery = isHookEnabled("json-error-recovery")
     ? safeHook("json-error-recovery", () => createJsonErrorRecoveryHook(ctx))
     : null
@@ -176,5 +182,6 @@ export function createToolGuardHooks(args: {
     teamToolGating,
     notepadWriteGuard,
     planFormatValidator,
+    taskReminder,
   }
 }

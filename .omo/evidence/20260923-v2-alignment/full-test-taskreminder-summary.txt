@@ -1,0 +1,8 @@
+# Full suite after wiring task-reminder (2026-09-24)
+
+ 12898 pass
+ 3 skip
+ 13 fail
+Ran 12914 tests across 1695 files. [237.92s]
+Full log: full-test-taskreminder.log
+13 failures, same as before; the entry that flips between runs is the known isolation flake.

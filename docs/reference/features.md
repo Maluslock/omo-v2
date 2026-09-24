@@ -919,6 +919,7 @@ Current composition counts:
 
 | Hook                             | Event               | Description                                         |
 | -------------------------------- | ------------------- | --------------------------------------------------- |
+| **task-reminder**                | PostToolUse + Event | Reminds the agent to record progress with the task tools after repeated tool calls without them. |
 | **task-resume-info**             | PostToolUse         | Provides task resume information for continuity.    |
 | **delegate-task-retry**          | PostToolUse + Event | Retries failed task delegation calls.               |
 | **empty-task-response-detector** | PostToolUse         | Detects empty responses from delegated tasks.       |

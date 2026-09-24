@@ -58,6 +58,7 @@ export function createEventHookDispatcher(hooks: CreatedHooks, runEventHookSafel
     );
     await runEventHookSafely("runtimeFallback", hooks.runtimeFallback?.event, input);
     await runEventHookSafely("agentUsageReminder", hooks.agentUsageReminder?.event, input);
+    await runEventHookSafely("taskReminder", hooks.taskReminder?.event, input);
     await runEventHookSafely("categorySkillReminder", hooks.categorySkillReminder?.event, input);
     await runEventHookSafely("interactiveBashSession", hooks.interactiveBashSession?.event, input);
     await runEventHookSafely("goal", hooks.goal?.event, input);
