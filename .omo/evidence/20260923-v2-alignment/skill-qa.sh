@@ -9,7 +9,8 @@ set -uo pipefail
 
 PORT="${1:-14370}"
 ROOT=/home/user/omo-v2
-RUN=/tmp/osk-qa-$$
+RUN="$ROOT/.omo/tmp/skill-qa-$$"
+mkdir -p "$ROOT/.omo/tmp"
 PROJ="$RUN/proj"
 XDG="$RUN/xdg"
 PW=probepw
@@ -44,17 +45,18 @@ export default { id: "zz-skill-dump", async setup(ctx: any) {
     e.add({ name: "probe-skills", description: "dump the skill list", execute: async () => {
       const raw: any = await ctx.skill.list({})
       const arr = Array.isArray(raw) ? raw : (raw?.data ?? [])
-      appendFileSync("/tmp/osk-qa-dump.json", JSON.stringify(
+      appendFileSync("__DUMP_PATH__", JSON.stringify(
         arr.map((s: any) => ({ id: s?.id, path: s?.path, contentLen: (s?.content ?? "").length }))
       ) + "\n")
     }})
   })
 } }
 EOF
+sed -i "s|__DUMP_PATH__|$RUN/skill-dump.json|" "$PROJ/.opencode/plugins/zz-skill-dump.ts"
 
 OMO_LOG=/tmp/oh-my-opencode.log
 OMO_BEFORE=$(wc -l < "$OMO_LOG")
-rm -f /tmp/osk-qa-dump.json
+rm -f "$RUN/skill-dump.json"
 
 cd "$PROJ"
 nohup env XDG_DATA_HOME="$XDG/data" XDG_CONFIG_HOME="$XDG/config" XDG_STATE_HOME="$XDG/state" \
@@ -83,10 +85,11 @@ sleep 2
 echo "--- omo registration line for this instance ---"
 tail -n +$((OMO_BEFORE + 1)) "$OMO_LOG" | grep -a "skills registered" | head -2
 
+export SKILL_DUMP="$RUN/skill-dump.json"
 OUTPUT=$(python3 - <<'PY'
 import json, os
 
-raw = open("/tmp/osk-qa-dump.json").read().strip().splitlines()
+raw = open(os.environ["SKILL_DUMP"]).read().strip().splitlines()
 skills = json.loads(raw[-1]) if raw else []
 by_id = {s["id"]: s for s in skills}
 print(json.dumps({"count": len(skills), "ids": sorted(by_id)}, indent=2))

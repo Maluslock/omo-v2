@@ -11,7 +11,8 @@ set -uo pipefail
 
 PORT="${1:-14322}"
 ROOT=/home/user/omo-v2
-RUN=/tmp/ocmd-qa-$$
+RUN="$ROOT/.omo/tmp/command-qa-$$"
+mkdir -p "$ROOT/.omo/tmp"
 PROJ="$RUN/proj"
 XDG="$RUN/xdg"
 PW=probepw
