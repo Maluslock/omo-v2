@@ -94,6 +94,34 @@ The render half is the open question: omo materializes its own `ViewNode` tree t
 same nodes, or needs real JSX plus a `script/build.ts` change, is the first thing the port has to
 settle.
 
+## Follow-up: the official 2.x docs (2026-09-24)
+
+The live failure above only proved the module was rejected. The official docs answer the rest, and both
+blockers are now precise:
+
+- `https://opencode.ai/v2/docs/build/plugins/cli/` (CLI plugins): V2 CLI/TUI extensions are
+  `import { Plugin } from "@opencode/plugin/tui"` plus `Plugin.define({ id, setup(context) })`. The host
+  resolves that specifier at runtime, so a local CLI plugin needs no absolute path. `setup` receives
+  `options`, `app`, `location`, `client`, `data`, `renderer`, `theme`, `ui`, `storage`, `attention` and
+  `markdown`, and returns a cleanup function. Slots available include `app`, `home.footer`,
+  `home.footer.status`, `prompt.footer`, `prompt.footer.status`, `prompt.footer.file`,
+  `session.composer.top`, `sidebar.content` and `sidebar.footer`; `render` returns JSX, with `prepend`,
+  `append`, `before`, `after` or `replace` placement.
+- `https://opencode.ai/v2/docs/cli/config/` (CLI settings): the terminal client owns exactly one global
+  file, `~/.config/opencode/cli.json` (or `$XDG_CONFIG_HOME/opencode/cli.json`), with
+  `"$schema": "https://opencode.ai/v2/cli.json"`. Unknown settings are rejected and valid edits reload
+  while the TUI runs. CLI plugins are declared under `plugins` (array; entries are a package name, a
+  local path, a file URL, or `{ package, options }`), and a leading `-` disables one. There is no
+  project-local CLI settings file. When `cli.json` is absent, the first V2 client start migrates
+  supported global `tui.json` settings and persisted preferences, leaving V1 files unchanged.
+- `@opencode/plugin@2.0.11` exports `./tui` -> `./dist/tui/index.js`, so the import resolves from the
+  installed package as well.
+
+That closes the open question in the section above: the render contract is JSX, not omo's `ViewNode`
+tree, and the config half is a file-name and key change (`tui.json` `plugin` -> `cli.json` `plugins`).
+omo's `ensureTuiPluginEntry` still targets `tui.json`, so a 2.x port needs both a module port and an
+installer branch.
+
 ## Safety
 
 - The tmux session was killed and confirmed gone.

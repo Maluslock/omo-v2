@@ -206,8 +206,16 @@ is a file in the plugin directory:
 export { default } from "<repo>/dist/index.js"
 ```
 
-TUI plugins are separate: `tui.json` takes the same entry list as the server config, but the shipped
-`dist/tui.js` is still V1-shaped and 2.0.11 rejects it with `Invalid V2 TUI plugin module`.
+TUI extensions are a separate plugin API. On 1.x they are declared in `tui.json` (a `plugin` array)
+and export `{ id, tui(api) }`. On 2.x the terminal client owns one global config,
+`~/.config/opencode/cli.json` (`$XDG_CONFIG_HOME/opencode/cli.json`), the CLI plugins are declared
+there under `plugins` (a package name, a local path, a file URL, or `{ package, options }`; a leading
+`-` disables), and the module must be `Plugin.define({ id, setup(context) })` imported from
+`@opencode/plugin/tui`, which the host resolves at runtime, so a local CLI plugin needs no absolute
+path. The shipped `dist/tui.js` is still V1-shaped, which is why 2.0.11 reports
+`Invalid V2 TUI plugin module`. 2.x has no project-local client config, and when `cli.json` is absent
+the first 2.x client start migrates supported global `tui.json` settings. Slot `render` functions
+return JSX, and `sidebar.content` is one of the available slots.
 
 ### Isolated probe recipe
 
@@ -244,7 +252,7 @@ Lessons that cost time to learn:
 
 | Gap | State |
 |---|---|
-| TUI sidebar plugin | Still V1-shaped; 2.0.11 refuses it. See `p6-b11-tui-plugin-v1-shape.md` for the API mapping a port needs. |
+| TUI sidebar plugin | Still V1-shaped; 2.0.11 refuses it. The fix is now fully scoped: declare it in `~/.config/opencode/cli.json` under `plugins`, and export `Plugin.define({ id, setup(context) })` from `@opencode/plugin/tui` with `context.ui.slot({ append: "sidebar.content", render })` returning JSX (`context.theme`, `context.location`, `context.storage.memory` replace the old `api.*` calls). See `p6-b11-tui-plugin-v1-shape.md`. |
 | Session title in tool output | `session_list` and `session_info` do not print a session title. Pre-existing formatter behavior. |
 | `reasoningEffort` for unknown model families | omo's shared capability guard drops the effort on purpose; identical on V1. |
 | Mid-turn compaction continuation | Host-native, verified; nothing to implement. |
