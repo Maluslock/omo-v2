@@ -133,7 +133,33 @@ Current state: `bun test` reports 12943 pass / 3 skip / 13 fail, and `tsgo --noE
 | `reasoningEffort` for unknown model families | Dropped on purpose by omo's shared capability guard, identically on V1. |
 | npm publishing | Not done in this fork. The published package still exports the V1 `{id, server}` shape and is rejected by 2.0.11; shipping the V2 adapter goes through the release workflow. |
 
-## 8. Evidence index
+## 8. How to re-verify
+
+The unit gate is cheap; the live gate is what catches host-behavior drift.
+
+```bash
+bun test                 # 13 pre-existing failures are the baseline
+npx tsgo --noEmit
+OMO_SKIP_MATERIALIZE=1 bun run build
+```
+
+For one capability on a live host: build, write a project `plugins/omo-local.ts` that re-exports
+`dist/index.js`, run `opencode run --standalone` against an isolated `XDG_*` tree with a copied
+config, and assert on the tool result plus the log window. The adapter guide documents the recipe and
+the gotchas; the per-capability proof is in the evidence files below.
+
+Re-run these probes when the host version changes:
+
+| Probe | Watches for |
+|---|---|
+| one prompt with a tool call, `--format json` | registration counts and a full tool-call round |
+| a plugin that subscribes to `ctx.event.subscribe` | the event vocabulary (a missing `session.idle` breaks every idle hook) |
+| a plugin that sets `event.options` and reads the outgoing body | which generation fields the host forwards and under which names |
+| a subagent or team member that calls one tool then keeps working | whether the host still reports it as busy |
+| a turn that overflows the context limit | compaction events and whether the turn resumes |
+| `tui.json`/`cli.json` plus a tmux TUI | which client config the host reads and whether the CLI plugin loads |
+
+## 9. Evidence index
 
 All under `../../.omo/evidence/20260923-v2-alignment/` (force-added because `.omo/*` is ignored).
 

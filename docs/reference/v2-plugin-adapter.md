@@ -241,6 +241,20 @@ Lessons that cost time to learn:
 - A WAL database copied without its `-wal` file loses rows. Copy the `.db`, `-db-wal` and `-db-shm`
   together when snapshotting a sandbox store.
 
+### Symptom, cause, fix
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| The provider rejects a request with "user messages only support text and media content" | a finished tool call was still projected as `running`, so the pair validator injected a placeholder into a user message | collect tool-result ids across the **whole** request, not per message |
+| Every completed tool call still reads as running | V2 emits `tool-result` as its own message | same as above |
+| `session_list` is empty after a restart | the index only knows sessions omo observed since it loaded | the host-store backfill in `tools/session-manager/sqlite-storage.ts` |
+| A subagent is stopped mid-turn after about 9 seconds | `client.session.status` answered with an empty map, which the background manager reads as "gone" | `v2/session-activity.ts` rebuilds the map from the turn envelope |
+| Idle-keyed hooks never fire | V2 emits no `session.idle` | `v2/hook-mapping.ts` maps `session.execution.succeeded` onto it |
+| Generation settings have no effect | a V1 name written into typed options (`maxOutputTokens`), or the handler returned early because the bridged input had no `message` record | the name map plus the synthesized message in `toV1ChatParams` |
+| `Invalid V2 TUI plugin module` | a V1 `{ id, tui }` module, or a `tui.json` entry on a 2.x host | the dual-shape `src/tui.ts` and an entry in `cli.json` |
+| A tool registers nowhere, or the log says "Skipping invalid tool registration" | args built with a different zod instance, or a delegating `toJSONSchema` override | never hand-roll the schema; `toV2Tool` checks provenance and throws |
+| The suite is red in a full run but green per file | a process-global seam mutated without restore, or `mock.module` of a module other suites import | the next subsection |
+
 ### Verification order, and process-global seams
 
 Follow the ladder instead of jumping to `bun test`: `tsgo --noEmit` (seconds, catches missing barrel
@@ -276,7 +290,37 @@ build runs concurrently. Run those alone before believing them.
 - `setStorageClient`, `resetSessionIndexSource`, `resetStorageClient` and
   `resetSqliteSessionBackfillWarning` are the per-suite seams.
 
-## 8. Known gaps
+## 8. CLI (TUI) plugins
+
+The terminal client is a second plugin host with its own contract, and it moved between generations:
+
+| | 1.x | 2.x |
+|---|---|---|
+| config | `tui.json`, `plugin` array | `~/.config/opencode/cli.json` (`$XDG_CONFIG_HOME/opencode/cli.json`), `plugins` array |
+| entry forms | package name, `file:<package dir>` | package name, local path, file URL, or `{ package, options }` |
+| module shape | `{ id, tui(api) }` | `Plugin.define({ id, setup(context) })` from `@opencode/plugin/tui` |
+| slot registration | `api.slots.register({ slots: { sidebar_content } })` | `context.ui.slot({ append: "sidebar.content", render })` |
+| render result | an imperative node | JSX |
+
+`src/tui.ts` ships one default export for both: the V1 object is unchanged and the 2.x definition adds
+`setup`. Three details are load-bearing:
+
+- The 2.x definition is written under `Plugin.define`'s **type** with a type-only import, because
+  `define` is an identity helper in 2.0.11. A 1.x host therefore never resolves `@opencode/plugin/tui`
+  or its `solid-js` dependency, and the `tui` build needs no new external.
+- Slot `render` is typed as JSX. omo materializes its existing `ViewNode` tree through
+  `@opentui/solid` and casts at that one boundary; if a host ever validates the returned element, this
+  is the line to revisit (it would need a JSX source config for the `tui` build node).
+- Reactivity comes from `context.storage.memory(key, { initial })`: the poller writes it and `render`
+  reads it. 2.x has no `requestRender`, and a plain module variable would not re-render the slot.
+
+`shared/opencode-client-config.ts` is the single place that decides the client-config file and array
+key. The installer and the doctor both call it, and a caller that already resolved the host version
+(the installers do) passes it in instead of letting it detect again. The doctor names the file it
+actually inspected in its messages, and the startup self-heal leaves detection to runtime because it
+runs inside the host.
+
+## 9. Known gaps
 
 | Gap | State |
 |---|---|
