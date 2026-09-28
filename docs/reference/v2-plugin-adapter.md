@@ -241,6 +241,34 @@ Lessons that cost time to learn:
 - A WAL database copied without its `-wal` file loses rows. Copy the `.db`, `-db-wal` and `-db-shm`
   together when snapshotting a sandbox store.
 
+### Verification order, and process-global seams
+
+Follow the ladder instead of jumping to `bun test`: `tsgo --noEmit` (seconds, catches missing barrel
+exports and out-of-scope names), then the single file you touched, then the affected cluster, and only
+then the full suite. Editing a shared surface such as `shared/index.ts` or the installers and running
+the suite first turns one missing export into a five-minute red run.
+
+The suite runs every file in one process, so two classes of self-inflicted failure are worth
+recognising by their signature, which is always **red in the full suite, green in isolation**:
+
+- **A mutated process-global seam without restore.** `setVersionCache(...)` is the common one; capture
+  the previous value with `getOpenCodeVersion()` and restore it rather than calling
+  `resetVersionCache()`, which wipes whatever the suites around you inherited. Tests in
+  `tui-plugin-config*.test.ts`, `add-tui-plugin-to-tui-config.test.ts` and
+  `create-plugin-module.test.ts` follow that pattern.
+- **`mock.module` of a module other suites import.** Mocking `./config/validate` from a sidebar test
+  leaked into every config-reading suite. Prefer isolating the environment (`HOME`,
+  `OPENCODE_CONFIG_DIR`, `XDG_CONFIG_HOME`) and writing a real config file, which is what
+  `features/tui-sidebar/roster-resolver.test.ts` does.
+
+To find the polluter, pair the suspect file with one canary that fails in the full run and bisect;
+re-running the whole suite to test a hypothesis costs about five minutes per attempt.
+
+Load-sensitive checks are not your change: the `prompt-async-route-audit` source scan can exceed its 5s
+budget on a busy machine and then cascade into a `Connection is closed` error from
+`typescript-native-source-parser.ts`, and the `plugin init performance` budgets trip when another
+build runs concurrently. Run those alone before believing them.
+
 ### Test-harness knobs
 
 - `test-setup.ts` points `HOME`/`USERPROFILE` at a hermetic temp dir, and now also
