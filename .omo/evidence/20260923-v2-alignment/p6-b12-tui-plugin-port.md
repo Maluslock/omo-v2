@@ -147,6 +147,18 @@ passes in the full suite on a quiet machine; it is not related to this change.
 - The installer and doctor halves have unit tests on both host generations, including the idempotency
   case that caught the key bug.
 
+## Wiring the real host (2026-09-24)
+
+The user's `~/.config/opencode/cli.json` already existed and the host had migrated the plugin entry
+into it (`plugins: ["oh-my-openagent@latest"]`), so the **config side was never the blocker** on this
+machine. That entry resolves to the published npm package, which still exports the V1 module shape, so
+the sidebar failed regardless of the local `plugins/omo-local.ts` server wiring.
+
+The entry was switched to the local build (`"file:/home/user/omo-v2"`); every other key (`$schema`,
+`theme`, `diffs`, `session`, `animations`) is preserved. Backups of `cli.json` and `tui.json` live
+under `.omo/tmp/config-backup-<timestamp>/`. `tui.json` is left untouched as the 1.x fallback. The
+change takes effect on the next terminal client start; no host service was restarted.
+
 ## What was omitted
 
 Synthetic content only; no real session text or credentials. The 1.x path is unchanged but has no live
