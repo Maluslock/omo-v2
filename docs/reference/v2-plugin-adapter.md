@@ -252,7 +252,7 @@ Lessons that cost time to learn:
 
 | Gap | State |
 |---|---|
-| TUI sidebar plugin | Still V1-shaped; 2.0.11 refuses it. The fix is now fully scoped: declare it in `~/.config/opencode/cli.json` under `plugins`, and export `Plugin.define({ id, setup(context) })` from `@opencode/plugin/tui` with `context.ui.slot({ append: "sidebar.content", render })` returning JSX (`context.theme`, `context.location`, `context.storage.memory` replace the old `api.*` calls). See `p6-b11-tui-plugin-v1-shape.md`. |
+| TUI sidebar plugin | **Ported.** `src/tui.ts` exports `{ ...v1Module, ...createV2TuiDefinition() }`: 1.x reads `tui`, 2.x reads `setup`. The 2.x path claims `context.ui.slot({ append: "sidebar.content" })` and publishes the view through `context.storage.memory` so the slot re-renders (no manual `requestRender`). `shared/opencode-client-config.ts` picks `cli.json` + `plugins` on 2.x and `tui.json` + `plugin` on 1.x for both the installer and the doctor. See `p6-b12-tui-plugin-port.md`. |
 | Session title in tool output | `session_list` and `session_info` do not print a session title. Pre-existing formatter behavior. |
 | `reasoningEffort` for unknown model families | omo's shared capability guard drops the effort on purpose; identical on V1. |
 | Mid-turn compaction continuation | Host-native, verified; nothing to implement. |

@@ -55,7 +55,7 @@ skills   20
 | Lifecycle events | `ctx.event.subscribe` with a corrected V1 event vocabulary | ported |
 | Session list / search / info | omo's own index in `ctx.storage` + read-only host-store backfill | ported |
 | Task tools, monitor tools, team tools (12), goal tools | existing V1 bodies behind the rebuilt V1 client surface | ported |
-| TUI sidebar plugin | needs the V2 CLI plugin shape | **not ported yet** |
+| TUI sidebar | V2 CLI plugin: `cli.json` `plugins` entry + `Plugin.define({id, setup})` on `sidebar.content` | ported |
 
 The full matrix, the per-capability evidence and the measured host facts are in
 [docs/reference/v2-port-summary.md](docs/reference/v2-port-summary.md). If you are changing the
@@ -105,10 +105,11 @@ Notes that save time:
 - **Reasoning levels.** A model that declares variants receives the variant, applied at request time.
   Models with no declared variants fall back to a reasoning effort, which the host drops for unknown
   model families. This is upstream compatibility behavior, not a fork change.
-- **TUI sidebar is not ported yet.** The shipped `dist/tui.js` still exports the V1 shape
-  (`{ id, tui(api) }`) and 2.x wants `Plugin.define({ id, setup(context) })` from
-  `@opencode/plugin/tui`, declared in `cli.json`. On 2.0.11 the host reports
-  `Invalid V2 TUI plugin module`. Everything else in this table works without it.
+- **TUI sidebar needs a client-config entry on 2.x.** `dist/tui.js` exports both host generations
+  (`{ id, tui(api) }` for 1.x, `{ id, setup(context) }` for 2.x) and renders into the
+  `sidebar.content` slot. 2.x reads the entry from the global `~/.config/opencode/cli.json`
+  (`plugins` array), not `tui.json`; the installer writes it automatically on 2.x hosts. The sidebar
+  appears inside a session view, not on the home screen.
 - **npm publishing** is not done here. Upstream publishes through its release workflow.
 
 ## Differences from upstream

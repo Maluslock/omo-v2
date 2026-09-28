@@ -21,9 +21,9 @@ commands 16
 skills  20
 ```
 
-Every V1 capability has either a working V2 path or a measured reason why the host cannot support it.
-The only shipped feature that still cannot load on 2.0.11 is the **TUI sidebar plugin**, because it is
-still exported in the V1 TUI module shape (section 7).
+Every V1 capability has either a working V2 path or a measured reason why the host cannot support it,
+and every shipped feature loads on 2.0.11, including the **TUI sidebar plugin**, which now exports both
+host generations and renders into the 2.x `sidebar.content` slot.
 
 ## 2. Capability matrix
 
@@ -49,7 +49,7 @@ still exported in the V1 TUI module shape (section 7).
 | Monitor tools | own process spawning + the prompt gate; `monitor.allowed_commands` for the bash ask | ported |
 | Team tools (12) | background manager for members, the prompt gate for live delivery | ported |
 | Goal tools | client-free registry tools | ported |
-| TUI sidebar | requires `Plugin.define({id, setup})` | **not ported** |
+| TUI sidebar | `Plugin.define({id, setup})` on the `sidebar.content` slot, entry in `cli.json` `plugins` | ported |
 
 ## 3. Host behavior that contradicted the plan
 
