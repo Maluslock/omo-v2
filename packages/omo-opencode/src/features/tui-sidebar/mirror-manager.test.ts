@@ -5,7 +5,7 @@ import { join } from "node:path"
 
 import { HEARTBEAT_MS, WRITE_DEBOUNCE_MS } from "./constants"
 import { readMirror } from "./mirror-io"
-import { TuiStateMirror } from "./mirror-manager"
+import { flushErrorFields, TuiStateMirror } from "./mirror-manager"
 import type { SessionAgentResolver } from "./snapshot-builder"
 import type { BackgroundTaskSnapshot } from "../background-agent/types"
 
@@ -244,5 +244,32 @@ describe("TuiStateMirror", () => {
 
     // then
     expect(buildCount).toBe(1)
+  })
+})
+
+describe("flushErrorFields", () => {
+  it("#given a plain error #when described #then the message and stack survive", () => {
+    // given
+    const error = new Error("rename failed")
+
+    // when
+    const fields = flushErrorFields(error)
+
+    // then
+    expect(fields.message).toBe("rename failed")
+    expect(typeof fields.stack).toBe("string")
+    expect(fields.code).toBeUndefined()
+  })
+
+  it("#given an errno error #when described #then the code is included", () => {
+    // given
+    const error = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" })
+
+    // when
+    const fields = flushErrorFields(error)
+
+    // then
+    expect(fields.message).toContain("permission denied")
+    expect(fields.code).toBe("EACCES")
   })
 })

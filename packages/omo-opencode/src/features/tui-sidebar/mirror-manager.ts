@@ -20,6 +20,22 @@ export type TuiStateMirrorInput = {
   readonly reportFlushError?: (error: Error) => void
 }
 
+export function flushErrorFields(error: Error): Record<string, unknown> {
+  const code = readErrorCode(error)
+  const fields: Record<string, unknown> = { message: error.message, stack: error.stack }
+  if (code !== undefined) {
+    fields.code = code
+  }
+  return fields
+}
+
+function readErrorCode(error: Error): string | undefined {
+  if ("code" in error && typeof error.code === "string") {
+    return error.code
+  }
+  return undefined
+}
+
 export class TuiStateMirror {
   private readonly snapshotInput: BuildTuiRuntimeSnapshotInput
   private readonly reportFlushError: (error: Error) => void
@@ -32,7 +48,13 @@ export class TuiStateMirror {
 
   constructor(input: TuiStateMirrorInput) {
     this.snapshotInput = input
-    this.reportFlushError = input.reportFlushError ?? ((error) => log("[tui-sidebar] mirror flush failed", { error }))
+    this.reportFlushError =
+      input.reportFlushError ??
+      ((error) =>
+        log("[tui-sidebar] mirror flush failed", {
+          projectDir: this.snapshotInput.projectDir,
+          ...flushErrorFields(error),
+        }))
   }
 
   buildSnapshot(): Promise<TuiRuntimeSnapshot> {
