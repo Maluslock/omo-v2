@@ -128,7 +128,7 @@ Current state: `bun test` reports 12943 pass / 3 skip / 13 fail, and `tsgo --noE
 
 | Item | Detail |
 |---|---|
-| TUI sidebar plugin | Two blockers, both now scoped against the official 2.x docs. (1) Config: 2.x reads one global `~/.config/opencode/cli.json` and declares CLI plugins under `plugins` (package name, local path, file URL, or `{ package, options }`), not `tui.json` under `plugin`; there is no project-local client config, and the first 2.x start migrates supported global `tui.json` settings. (2) Module: `dist/tui.js` still exports `{ id, tui(api) }`, while 2.x wants `Plugin.define({ id, setup(context) })` from `@opencode/plugin/tui` (resolved by the host at runtime). Slots include `sidebar.content` and `sidebar.footer`, and `render` returns JSX, so the port replaces the current `ViewNode` tree materialization and the 1s poll with JSX plus `context.storage.memory`. Details and the captured host error are in `../../.omo/evidence/20260923-v2-alignment/p6-b11-tui-plugin-v1-shape.md`. |
+| TUI sidebar plugin | **Closed** (`2d5ef10`): both blockers recorded here before the port are resolved. The client-config target now resolves per host generation (`cli.json` + `plugins` for 2.x, `tui.json` + `plugin` for 1.x), and `dist/tui.js` exports both host generations, with the 2.x path claiming `sidebar.content` and publishing through `context.storage.memory`. Evidence: `p6-b12-tui-plugin-port.md`. |
 | Session titles in tool output | `session_list` and `session_info` do not print a session title. Pre-existing formatter behavior, unrelated to V2. |
 | `reasoningEffort` for unknown model families | Dropped on purpose by omo's shared capability guard, identically on V1. |
 | npm publishing | Not done in this fork. The published package still exports the V1 `{id, server}` shape and is rejected by 2.0.11; shipping the V2 adapter goes through the release workflow. |
@@ -178,4 +178,5 @@ All under `../../.omo/evidence/20260923-v2-alignment/` (force-added because `.om
 | `p6-b8-category-max-tokens.md` | The ignored `max_tokens` key |
 | `p6-b9-session-backfill.md` | Enumeration backfill from the host store |
 | `p6-b11-tui-plugin-v1-shape.md` | The TUI module shape failure |
+| `p6-b12-tui-plugin-port.md` | The TUI sidebar port: dual-generation export, `sidebar.content`, and the client-config target |
 | `p6-real-config-smoke.md`, `p6-c1-local-build.md` | Real-config smoke and the supported build recipe |
