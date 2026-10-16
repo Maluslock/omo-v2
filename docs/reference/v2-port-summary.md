@@ -116,7 +116,10 @@ Every capability follows the same ladder, and the evidence files record each run
    to the diff rather than to a hypothesis.
 5. **Full suite** compared against the known baseline of 13 pre-existing failures.
 
-Current state: `bun test` reports 12943 pass / 3 skip / 13 fail, and `tsgo --noEmit` exits 0.
+Current state (2026-10-16, after the `message.updated` synthesis): `bun test` reports 12971 pass /
+3 skip / **13 fail - the same 13 pre-existing failures** (Codex installer version sync, the DMCA
+attribution pins, two command-dispatch cases and the six network-dependent auto-update checks),
+none of them in `src/v2/`; `tsgo --noEmit` exits 0.
 The V2 subset alone - `bun test packages/omo-opencode/src/v2/` - is 282 pass / 0 fail after the
 `message.updated` synthesis (2026-10-16).
 
