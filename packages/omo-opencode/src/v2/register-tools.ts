@@ -14,7 +14,9 @@ import { ArgSchemaProvenanceError, toV2Tool } from "./tool-mapping"
 
 type V2Ctx = Parameters<NonNullable<Parameters<typeof Plugin.define>[0]["setup"]>>[0]
 
-const NAMESPACE = "omo"
+/** Exported so the request-config bridge can resolve bare V1 tool names to `omo_*` ids. */
+export const TOOL_NAMESPACE = "omo"
+const NAMESPACE = TOOL_NAMESPACE
 
 /**
  * Tools that dereference a host surface with **no usable V2 mapping**, so they stay out of the V2

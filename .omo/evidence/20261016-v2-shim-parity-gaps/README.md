@@ -21,7 +21,7 @@ interrupt.
 | 4 | `message.updated` rebuilt from the V2 step events | **works** | `V1_MESSAGE_UPDATED=3`, `V1_MESSAGE_UPDATED_FINISHED=1`, `ROLE=assistant`, `PROVIDER=mock`, `MODEL=mock-1`, `TOKENS=yes`, `TIME=yes` — see `out/probe8-v1events.txt` |
 | 5 | `session.created` announced for a session that predates the subscription | **works** | `V1_SESSION_CREATED` lists all three sessions but `RAW_SESSION_CREATED` only the two created after the plugin loaded: `V1_CREATED_WITHOUT_RAW=ses_ebc23254affe8A5G0ryhk3bUmc` - the donor session, announced in the same millisecond as its first `message.updated`, while the driver and child kept their real, titled events — see `out/probe9-created-events.txt` |
 | 6 | `message.part.updated` / `message.part.delta` rebuilt from the V2 part streams, and the interrupt mapped to `session.stop` | **works** | `V1_PART_UPDATED=6`, `V1_PART_DELTA=1`, `V1_PART_KINDS=text,tool`, `V1_PART_FIELDS=text`, `V1_SESSION_STOP=1`, while the raw stream carried only `session.text.*` / `session.tool.*` / `session.execution.interrupted` (`RAW_STREAM_TYPES` in the same capture) — see `out/probe10-parts.txt` |
-| 7 | V1 `system` / `tools` on a create/prompt body, replayed onto the V2 request | **works** | the shim recorded `{system: ["ZZPROBE_SYSTEM_MARKER"], tools: {bash:false, task:false}}`, and the provider saw the difference: the two pre-recording requests kept the host's whole `MOCK_FIRST_REQUEST_TOOLS` set (`shell=yes subagent=yes`, 13 tools), the two after lost exactly those two (`marker=yes shell=no subagent=no`, 11 tools, `question` untouched) — `MOCK_REQUEST_ROW` in `out/probe13-session-prompt-config.txt`, with `MOCK_REQUESTS_WITH_HANDROLLED_MARKER=0` |
+| 7 | V1 `system` / `tools` on a create/prompt body, replayed onto the V2 request | **works** | the shim recorded `{system: ["ZZPROBE_SYSTEM_MARKER"], tools: {bash:false, task:false, zz_probe_shadow:false}}`, and the provider saw the difference: the two pre-recording requests kept the host's whole advertised set (`shell=yes subagent=yes shadow=yes`, 14 tools), the two after lost exactly those three (`marker=yes shell=no subagent=no shadow=no`, 11 tools, `question` untouched). The third denial is the interesting one: the body named it bare while the host advertises it namespaced (`omo_zz_probe_shadow`, see `MOCK_FIRST_REQUEST_TOOLS`), so `MOCK_REQUESTS_WITH_OMO_SHADOW_TOOL=2` (the requests before the recording) proves the namespaced resolution fired — `MOCK_REQUEST_ROW` in `out/probe13-session-prompt-config.txt`, with `MOCK_REQUESTS_WITH_HANDROLLED_MARKER=0` |
 
 Verdicts 1–3 come from the same run (`out/probe7-shim-parity.txt`); verdict 4 is the next run of the
 same runner (`out/probe8-shim-parity-mapper.txt`), after the probe gained the V1 pipeline; verdict 5 is
@@ -63,6 +63,7 @@ this document was copied here:
 | `out/probe10-probe.jsonl` / `out/probe10-probe-records.txt` | the full NDJSON of that run, and the records alone |
 | `out/probe13-session-prompt-config.txt` | the verdicts again, now with `PROMPTCONFIG_*` and one `MOCK_REQUEST_ROW` per provider request |
 | `out/probe13-probe.jsonl` / `out/probe13-probe-records.txt` | the full NDJSON of that run (48 records), and the records alone |
+| `out/probe13-regression-after-parity.txt` | the whole-plugin regression on the final `dist/` (every stage `rc=0`, 2026-10-16 17:07–17:08) |
 
 ## How each verdict is obtained
 
@@ -111,13 +112,18 @@ body could carry `system` and `tools`; V2's forms have no such fields, so the sh
 registry and the assembly replays them from the `context` hook. The probe registers the *production*
 replay hook (`registerOmoSessionPromptConfigHook` from `packages/omo-opencode/src/v2/register-hooks.ts`)
 the way `packages/omo-opencode/src/v2/register-hook-assembly.ts` does, then calls
-`shim.session.promptAsync` with `system: "ZZPROBE_SYSTEM_MARKER"` and `tools: {bash: false, task: false}`
-for the driver session. What the shim recorded (`PROMPTCONFIG_RECORDED_SYSTEM`,
+`shim.session.promptAsync` with `system: "ZZPROBE_SYSTEM_MARKER"` and
+`tools: {bash: false, task: false, zz_probe_shadow: false}` for the driver session. The probe also
+registers a second tool under the `omo` namespace (`omo_zz_probe_shadow`), because omo's own tools
+are advertised with that prefix (`packages/omo-opencode/src/v2/register-tools.ts` builds the id as
+`${NAMESPACE}_${tool.name}`) while V1 bodies deny them by bare name - that is the third denial, and
+the one that would silently fail without the prefix attempt. What the shim recorded (`PROMPTCONFIG_RECORDED_SYSTEM`,
 `PROMPTCONFIG_RECORDED_TOOLS=bash,task`) is only the middle of the chain; the verdict is the provider's
 view, printed per request as `MOCK_REQUEST_ROW`. The driver's requests before the recording carry the
-host's full advertised set (`shell=yes subagent=yes`, 13 tools); the requests after it carry the system
-part and lost exactly the two denied names through the action translation (`bash`→`shell`,
-`task`→`subagent`), leaving `question` in place. Run it with
+host's full advertised set (`shell=yes subagent=yes shadow=yes`, 14 tools); the requests after it carry
+the system part and lost exactly the three denied names - two through the action translation
+(`bash`→`shell`, `task`→`subagent`) and one through the namespace prefix
+(`zz_probe_shadow`→`omo_zz_probe_shadow`) - leaving `question` in place. Run it with
 `SHIM_PROBE_MODE=session-prompt-config SHIM_PROBE_MUTATE_CONTEXT=0 SHIM_PROBE_SETTLE_SECONDS=8`:
 the hand-rolled `context` hook the probe uses for probe11/probe12 stays off, and it pushes a different
 literal, so `MOCK_REQUESTS_WITH_HANDROLLED_MARKER=0` proves the marker came from the production path.
@@ -135,12 +141,13 @@ its `ended` half never did, because the run interrupts it.
 
 ## What this capture does **not** prove
 
-- **Not** a `dist/` regression run. The probe imports `src/` on purpose: `dist/` may lag the fix
-  under test. Whole-plugin regression is the 2026-10-16 16:27–16:29 suite run
-  (`run-recheck-all.sh` in `.omo/evidence/20261016-opencode-2030-recheck/`, after `bun run build`
-  with these fixes): every stage reported `rc=0` and rewrote all 11 captures plus the schema-diff
-  and real-DB checks in that directory's `out/`; the run log is
-  `out/probe7-regression-progress.txt` here. Both belong to the same change.
+- **Not** a `dist/` regression run of the probe itself. The probe imports `src/` on purpose: `dist/`
+  may lag the fix under test. Whole-plugin regression is a separate suite
+  (`run-recheck-all.sh` in `.omo/evidence/20261016-opencode-2030-recheck/`, after `bun run build` with
+  all of these fixes): every stage reported `rc=0` and rewrote all 11 captures plus the schema-diff and
+  real-DB checks in that directory's `out/`. It was run twice - 16:27–16:29 after the shim fixes
+  (`out/probe7-regression-progress.txt` here) and 17:07–17:08 on the final `dist/`
+  (`out/probe13-regression-after-parity.txt`, 20 lines, ten stages).
 - **Not** summary quality. The compaction's model reply is a fixed template
   (`summary-fixture.md`), so `session.compaction.ended` proves the *plumbing* (shim → `ctx.session.compact`
   → host compaction loop → events), not that a good summary was produced. The first capture of this
@@ -177,6 +184,12 @@ its `ended` half never did, because the run interrupts it.
   in `packages/omo-opencode/src/v2/register-hook-assembly.test.ts`.
 - **Not** proof for delegated members or compaction requests. Only the ordinary prompt requests of the
   two sessions in this run were observed.
+- **Not** proof about omo's real tool ids for verdict 7. The namespaced denial is proven with a
+  synthetic tool the probe registers under the same `omo` prefix (`omo_zz_probe_shadow`) that
+  `packages/omo-opencode/src/v2/register-tools.ts` uses for omo's own tools; the real `omo_look_at` /
+  `omo_task_create` ids are not exercised here, and the bare-name denials omo actually passes
+  (`features/background-agent/spawner/task-prompt-body.ts`, `tools/look-at/look-at-session-runner.ts`)
+  are covered by `packages/omo-opencode/src/v2/session-prompt-config.test.ts` instead.
 
 ## Two host facts this run pinned down
 

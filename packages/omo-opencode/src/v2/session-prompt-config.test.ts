@@ -107,6 +107,16 @@ describe("resolveAdvertisedTool", () => {
     expect(resolveAdvertisedTool(advertised, "todowrite")).toBeUndefined()
     expect(resolveAdvertisedTool({}, "bash")).toBeUndefined()
   })
+
+  it("finds the adapter's own namespaced id when the V1 body used the bare name", () => {
+    const namespaced = { omo_look_at: {}, omo_call_omo_agent: {}, shell: {} }
+    expect(resolveAdvertisedTool(namespaced, "look_at", "omo")).toBe("omo_look_at")
+    expect(resolveAdvertisedTool(namespaced, "call_omo_agent", "omo")).toBe("omo_call_omo_agent")
+    // Without the namespace the bare name is still unmapped, which is what the report is for.
+    expect(resolveAdvertisedTool(namespaced, "look_at")).toBeUndefined()
+    expect(resolveAdvertisedTool(namespaced, "bash", "omo")).toBe("shell")
+    expect(resolveAdvertisedTool(namespaced, "absent", "omo")).toBeUndefined()
+  })
 })
 
 describe("applySessionPromptConfig", () => {
@@ -151,6 +161,23 @@ describe("applySessionPromptConfig", () => {
 
     expect(Object.keys(event.tools as Record<string, unknown>)).toEqual([])
     expect(reports).toEqual([["unmapped", "todowrite"]])
+  })
+
+  it("turns off the adapter's own tool when the V1 body denied it by bare name", () => {
+    const event: Record<string, unknown> = {
+      sessionID: "ses_1",
+      tools: { omo_look_at: {}, omo_call_omo_agent: {}, shell: {}, question: {} },
+    }
+    const { reports, report } = collect()
+    applySessionPromptConfig(
+      event,
+      { tools: { look_at: false, call_omo_agent: false, task: false } },
+      report,
+      { namespace: "omo" },
+    )
+
+    expect(Object.keys(event.tools as Record<string, unknown>)).toEqual(["shell", "question"])
+    expect(reports).toEqual([["unmapped", "task"]])
   })
 
   it("never adds a tool the host does not advertise", () => {

@@ -34,6 +34,7 @@ import {
   type V1ChatMessageInput,
   type V1ChatMessageOutput,
 } from "./prompt-hook-mapping"
+import { TOOL_NAMESPACE } from "./register-tools"
 import {
   applySessionPromptConfig,
   type SessionPromptConfig,
@@ -284,16 +285,23 @@ export async function registerOmoSessionPromptConfigHook(
     if (!isRecord(event) || typeof event.sessionID !== "string") return
     const config = resolve(event.sessionID)
     if (config === undefined) return
-    applySessionPromptConfig(event, config, (reason, name) => {
-      const key = `${reason}:${name}`
-      if (reported.has(key)) return
-      reported.add(key)
-      log(
-        reason === "ask"
-          ? `[v2] session prompt config: "ask" for tool "${name}" cannot be enforced per request and the tool stays advertised`
-          : `[v2] session prompt config: tool "${name}" has no V2 counterpart in this request and cannot be denied`,
-        { sessionID: event.sessionID },
-      )
-    })
+    applySessionPromptConfig(
+      event,
+      config,
+      (reason, name) => {
+        const key = `${reason}:${name}`
+        if (reported.has(key)) return
+        reported.add(key)
+        log(
+          reason === "ask"
+            ? `[v2] session prompt config: "ask" for tool "${name}" cannot be enforced per request and the tool stays advertised`
+            : `[v2] session prompt config: tool "${name}" has no V2 counterpart in this request and cannot be denied`,
+          { sessionID: event.sessionID },
+        )
+      },
+      // omo registers its own tools as `omo_*`, so a V1 body's bare `look_at` denial has to find
+      // that id or it stays advertised.
+      { namespace: TOOL_NAMESPACE },
+    )
   })
 }

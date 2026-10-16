@@ -392,16 +392,19 @@ handrolled_hits = sum(1 for b in bodies if has_marker(b, 'ZZPROBE_HANDROLLED_SYS
 print('MOCK_PROVIDER_REQUESTS=%d' % len(bodies))
 for index, body in enumerate(bodies):
     names = tool_names(json.loads(body.get('raw') or '{}'))
-    print('MOCK_REQUEST_ROW=%d decision=%s marker=%s shell=%s subagent=%s tools=%d' % (
+    print('MOCK_REQUEST_ROW=%d decision=%s marker=%s shell=%s subagent=%s shadow=%s tools=%d' % (
         index,
         body.get('decision') or 'unknown',
         'yes' if has_marker(body, 'ZZPROBE_SYSTEM_MARKER') else 'no',
         'yes' if 'shell' in names else 'no',
         'yes' if 'subagent' in names else 'no',
+        'yes' if 'omo_zz_probe_shadow' in names else 'no',
         len(names),
     ))
 print('MOCK_REQUESTS_WITH_SYSTEM_MARKER=%d' % marker_hits)
 print('MOCK_REQUESTS_WITH_HANDROLLED_MARKER=%d' % handrolled_hits)
+shadow_hits = sum(1 for b in bodies if 'omo_zz_probe_shadow' in tool_names(json.loads(b.get('raw') or '{}')))
+print('MOCK_REQUESTS_WITH_OMO_SHADOW_TOOL=%d' % shadow_hits)
 for name in drop:
     hits = sum(1 for p in parsed_bodies if name in tool_names(p))
     print('MOCK_REQUESTS_WITH_%s_TOOL=%d' % (name.upper(), hits))

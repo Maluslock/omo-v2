@@ -196,8 +196,10 @@ has no V2 counterpart that names the removed message.
 A V1 **request field with no V2 home** travels the other way. `system` and `tools` ride a V1
 create/prompt body; the V2 forms cannot hold them, so the client shim records them per session
 (`session-prompt-config.ts`) and the assembly replays them from the `context` hook
-(`registerOmoSessionPromptConfigHook`). Two rules keep it honest: translate the V1 tool name through
-the action table (`bash` → `shell`, `task` → `subagent`) and **delete only what the body denied** - an
+(`registerOmoSessionPromptConfigHook`). Two rules keep it honest: resolve the V1 tool name against
+the request's advertised map (its own name, then the action table: `bash` → `shell`, `task` →
+`subagent`, then the adapter's namespace prefix: `look_at` → `omo_look_at`, because
+`register-tools.ts` advertises omo's tools as `omo_*`) and **delete only what the body denied** - an
 unmatched or unknown name is logged once and ignored, never advertised; and remember the scope change,
 because the replay is session-wide while the V1 body was message-wide.
 
@@ -374,7 +376,7 @@ runs inside the host.
 | TUI sidebar plugin | **Ported.** `src/tui.ts` exports `{ ...v1Module, ...createV2TuiDefinition() }`: 1.x reads `tui`, 2.x reads `setup`. The 2.x path claims `context.ui.slot({ append: "sidebar.content" })` and publishes the view through `context.storage.memory` so the slot re-renders (no manual `requestRender`). `shared/opencode-client-config.ts` picks `cli.json` + `plugins` on 2.x and `tui.json` + `plugin` on 1.x for both the installer and the doctor. See `p6-b12-tui-plugin-port.md`. |
 | `message.part.updated` / `message.part.delta` | **Ported by synthesis.** V2 has no part objects, so a part is rebuilt from `session.text.*`, `session.reasoning.*`, `session.tool.*` and `session.message.content.updated`, addressed by a derived id. `session.execution.interrupted` is mapped to V1 `session.stop`. Capture: `out/probe10-part-events.txt` in `20261016-v2-shim-parity-gaps/`. |
 | `message.removed` / `message.part.removed` | Deliberately unmapped: no V2 event names the removed messages (`session.revert.staged` carries the revert point, `session.revert.committed` only its target), so `restoreBackgroundOutputConsumption` cannot be triggered without guessing ids. |
-| V1 body `system` / `tools` | **Ported, session-scoped.** V2 request forms carry neither field, so the shim records them per session and the `context` hook replays them onto every later request until they are replaced or the session is deleted; V1 applied them to one create/prompt body. Denied names go through the action table (`bash`→`shell`, `task`→`subagent`); an unknown V1 name is logged and ignored, never added. Capture: `out/probe13-session-prompt-config.txt` in `20261016-v2-shim-parity-gaps/`. |
+| V1 body `system` / `tools` | **Ported, session-scoped.** V2 request forms carry neither field, so the shim records them per session and the `context` hook replays them onto every later request until they are replaced or the session is deleted; V1 applied them to one create/prompt body. Denied names resolve in three steps - the name itself, the action table (`bash`→`shell`, `task`→`subagent`), and the namespace prefix (`look_at`→`omo_look_at`) - and anything still unmatched is logged and ignored, never added. Capture: `out/probe13-session-prompt-config.txt` in `20261016-v2-shim-parity-gaps/`. |
 | Session title in tool output | `session_list` and `session_info` do not print a session title. Pre-existing formatter behavior. |
 | `reasoningEffort` for unknown model families | omo's shared capability guard drops the effort on purpose; identical on V1. |
 | Mid-turn compaction continuation | Host-native, verified; nothing to implement. |

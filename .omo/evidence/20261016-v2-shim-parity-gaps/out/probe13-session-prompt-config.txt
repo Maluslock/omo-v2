@@ -1,13 +1,13 @@
-MOCK_PORT=46899
+MOCK_PORT=50521
 TOOL_ID=zzprobe_zz_shim_probe
 MARKER=PROBE_MARKER
 HOST_VERSION=opencode v2.0.30
 SERVE=ready
 PLUGIN_LOAD=lazy_first_turn
-DONOR_SESSION=ses_ebc106379ffe9o98ks1pR18sKJ
+DONOR_SESSION=ses_ebc0725a2ffek1aT6jMnqc51aO
 DONOR_PROMPT_HTTP=200
 DONOR_TURN_DONE=1
-DRIVER_SESSION=ses_ebc1056d2ffe2uHBtTOPyYf7hr
+DRIVER_SESSION=ses_ebc0713eaffe3bG30jH3DMo25r
 DRIVER_PROMPT_HTTP=200
 PROBE_TOOL_CALLED=yes
 HOST_CHILD_PARENTID=NO_CHILD
@@ -38,9 +38,9 @@ V1_MESSAGE_UPDATED_PROVIDER=mock
 V1_MESSAGE_UPDATED_MODEL=mock-1
 V1_MESSAGE_UPDATED_TOKENS=yes
 V1_MESSAGE_UPDATED_TIME=yes
-V1_SESSION_CREATED=ses_ebc1056d2ffe2uHBtTOPyYf7hr,ses_ebc106379ffe9o98ks1pR18sKJ
-RAW_SESSION_CREATED=ses_ebc1056d2ffe2uHBtTOPyYf7hr
-V1_CREATED_WITHOUT_RAW=ses_ebc106379ffe9o98ks1pR18sKJ
+V1_SESSION_CREATED=ses_ebc0713eaffe3bG30jH3DMo25r,ses_ebc0725a2ffek1aT6jMnqc51aO
+RAW_SESSION_CREATED=ses_ebc0713eaffe3bG30jH3DMo25r
+V1_CREATED_WITHOUT_RAW=ses_ebc0725a2ffek1aT6jMnqc51aO
 V1_PART_UPDATED=10
 V1_PART_DELTA=3
 V1_PART_KINDS=text,tool
@@ -54,17 +54,18 @@ MOCK_TEXT_REPLIES=3
 PROMPTCONFIG_HOOK_REGISTERED=yes
 PROMPTCONFIG_SENT=yes
 PROMPTCONFIG_RECORDED_SYSTEM=ZZPROBE_SYSTEM_MARKER
-PROMPTCONFIG_RECORDED_TOOLS=bash,task
+PROMPTCONFIG_RECORDED_TOOLS=bash,task,zz_probe_shadow
 CONTEXT_HOOK_REGISTERED=no
 CONTEXT_HOOK_CALLS=0
 MOCK_PROVIDER_REQUESTS=4
-MOCK_REQUEST_ROW=0 decision=text marker=no shell=yes subagent=yes tools=13
-MOCK_REQUEST_ROW=1 decision=tool_call marker=no shell=yes subagent=yes tools=13
-MOCK_REQUEST_ROW=2 decision=text marker=yes shell=no subagent=no tools=11
-MOCK_REQUEST_ROW=3 decision=text marker=yes shell=no subagent=no tools=11
+MOCK_REQUEST_ROW=0 decision=text marker=no shell=yes subagent=yes shadow=yes tools=14
+MOCK_REQUEST_ROW=1 decision=tool_call marker=no shell=yes subagent=yes shadow=yes tools=14
+MOCK_REQUEST_ROW=2 decision=text marker=yes shell=no subagent=no shadow=no tools=11
+MOCK_REQUEST_ROW=3 decision=text marker=yes shell=no subagent=no shadow=no tools=11
 MOCK_REQUESTS_WITH_SYSTEM_MARKER=2
 MOCK_REQUESTS_WITH_HANDROLLED_MARKER=0
-MOCK_FIRST_REQUEST_TOOLS=edit,execute,glob,grep,question,read,shell,skill,subagent,webfetch,websearch,write,zzprobe_zz_shim_probe
+MOCK_REQUESTS_WITH_OMO_SHADOW_TOOL=2
+MOCK_FIRST_REQUEST_TOOLS=edit,execute,glob,grep,omo_zz_probe_shadow,question,read,shell,skill,subagent,webfetch,websearch,write,zzprobe_zz_shim_probe
 ISO_DB=/home/user/.local/share/opencode/opencode.db
 ISO_BEFORE=297
 ISO_AFTER=297

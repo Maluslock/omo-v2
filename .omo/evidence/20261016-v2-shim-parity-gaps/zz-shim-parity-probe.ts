@@ -278,7 +278,10 @@ export default {
               path: { id: context.sessionID },
               body: {
                 system: "ZZPROBE_SYSTEM_MARKER",
-                tools: { bash: false, task: false },
+                // `zz_probe_shadow` is registered below under the `omo` namespace, so its advertised
+                // id is `omo_zz_probe_shadow` while the V1 body names it bare: this is the
+                // namespaced-resolution rule, live.
+                tools: { bash: false, task: false, zz_probe_shadow: false },
                 parts: [{ type: "text", text: "zzprobe follow-up turn" }],
               },
             })
@@ -325,8 +328,22 @@ export default {
       namespace: "zzprobe",
       directory: ctx.location?.directory ?? process.cwd(),
     })
+    // A second tool whose advertised id carries the adapter's own namespace, so a V1 body that
+    // denies the bare name has to resolve `omo_zz_probe_shadow` for the denial to take effect.
+    const shadow = toV2Tool(
+      "zz_probe_shadow",
+      {
+        description: "Shadow tool: proves a namespaced denial resolves live.",
+        args: {},
+        async execute(): Promise<string> {
+          return "SHADOW"
+        },
+      } as Any,
+      { namespace: "omo", directory: ctx.location?.directory ?? process.cwd() },
+    )
     await ctx.tool.transform((editor: Any) => {
       editor.add(wrapped)
+      editor.add(shadow)
     })
     record("registered", { name: wrapped?.name ?? null, namespace: "zzprobe" })
   },

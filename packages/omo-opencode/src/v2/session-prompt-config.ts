@@ -107,14 +107,27 @@ export function resetSessionPromptConfigs(): void {
   configs.clear()
 }
 
-/** Resolve the advertised tool id a V1 name refers to, or undefined when it is not advertised. */
+/**
+ * Resolve the advertised tool id a V1 name refers to, or undefined when it is not advertised.
+ *
+ * Three attempts, in order: the name itself (V2's own tools), the action alias (`bash` ->
+ * `shell`), and the adapter's namespace prefix. The last one matters because omo registers its own
+ * tools under a namespace (`omo_look_at`), while V1 prompt bodies deny them by bare name
+ * (`look_at`) - without it those denials would be reported as unmapped and silently leave the tool
+ * on.
+ */
 export function resolveAdvertisedTool(
   advertised: Record<string, unknown>,
   name: string,
+  namespace?: string,
 ): string | undefined {
   if (advertised[name] !== undefined) return name
   const alias = V1_TO_V2_TOOL[name]
   if (alias !== undefined && advertised[alias] !== undefined) return alias
+  if (namespace !== undefined && namespace !== "") {
+    const namespaced = `${namespace}_${name}`
+    if (advertised[namespaced] !== undefined) return namespaced
+  }
   return undefined
 }
 
@@ -128,11 +141,15 @@ export type SessionPromptConfigReport = (reason: "unmapped" | "ask", name: strin
  * offered, and V2's `event.tools` is `{description, input}`, so a tool the host does not advertise
  * cannot be added here either. `"ask"` has no per-request equivalent on V2 (the host's permission
  * rules are fixed at session creation), so the tool stays advertised and the caller reports it.
+ *
+ * `options.namespace` is the prefix the adapter registers its own tools under, so a V1 body that
+ * denies `look_at` turns off V2's `omo_look_at`.
  */
 export function applySessionPromptConfig(
   event: { system?: unknown; tools?: unknown },
   config: SessionPromptConfig,
   report: SessionPromptConfigReport,
+  options: { namespace?: string } = {},
 ): void {
   for (const text of config.system ?? []) {
     if (Array.isArray(event.system)) event.system.push({ type: "text", text })
@@ -149,7 +166,7 @@ export function applySessionPromptConfig(
       report("ask", name)
       continue
     }
-    const target = resolveAdvertisedTool(advertised, name)
+    const target = resolveAdvertisedTool(advertised, name, options.namespace)
     if (target === undefined) {
       report("unmapped", name)
       continue
