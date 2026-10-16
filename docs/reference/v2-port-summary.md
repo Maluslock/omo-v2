@@ -41,7 +41,7 @@ host generations and renders into the 2.x `sidebar.content` slot.
 | `experimental.chat.system.transform` | `session.hook("context").system` | ported |
 | `experimental.session.compacting` | `session.hook("compaction")` | ported |
 | `compaction.autocontinue` | `session.compaction.ended` state restore | ported; continuation is host-native |
-| `event` | `ctx.event.subscribe` + a corrected event vocabulary + `message.updated` synthesized from the V2 step events + `session.created` announced for sessions that predate the subscription | ported |
+| `event` | `ctx.event.subscribe` + a corrected event vocabulary + `message.updated` synthesized from the V2 step events + `message.part.updated`/`message.part.delta` synthesized from the V2 part streams + `session.created` announced for sessions that predate the subscription | ported |
 | `tool.execute.before/after` | `ctx.tool.hook(...)` | ported |
 | `permission` | fail-closed self-answer (`ask-resolver.ts`) | ported as far as the host allows |
 | Session enumeration | omo's own index in `ctx.storage` + a read-only host-store backfill | ported |
@@ -145,7 +145,7 @@ The V2 subset alone - `bun test packages/omo-opencode/src/v2/` - is 282 pass / 0
 | Category `max_tokens`, config docs | `bc769b6`, `48cee04` |
 | Session enumeration backfill | `ca7fa33` |
 | `reasoningEffort` resolution, TUI shape finding | `9f450e2` |
-| 2.0.30 re-verification, and the parity gaps it exposed | `2201e6348`, `f73a145d5` (probe table), `73b18b061` (client shim), `c77056cc6` (`message.updated` synthesis) |
+| 2.0.30 re-verification, and the parity gaps it exposed | `2201e6348`, `f73a145d5` (probe table), `73b18b061` (client shim), `c77056cc6` (`message.updated` synthesis), `c9c87efbe` (`session.created`), and the part-event synthesis (`hook-mapping.ts`) |
 
 ## 7. Open items
 
@@ -154,7 +154,8 @@ The V2 subset alone - `bun test packages/omo-opencode/src/v2/` - is 282 pass / 0
 | TUI sidebar plugin | **Closed** (`2d5ef10`): both blockers recorded here before the port are resolved. The client-config target now resolves per host generation (`cli.json` + `plugins` for 2.x, `tui.json` + `plugin` for 1.x), and `dist/tui.js` exports both host generations, with the 2.x path claiming `sidebar.content` and publishing through `context.storage.memory`. Evidence: `p6-b12-tui-plugin-port.md`. |
 | Session titles in tool output | `session_list` and `session_info` do not print a session title. Pre-existing formatter behavior, unrelated to V2. |
 | `reasoningEffort` for unknown model families | Dropped on purpose by omo's shared capability guard, identically on V1. |
-| V1 `message.part.updated` | Still unmapped: V2 streams parts as `session.text.*` / `session.reasoning.*`, and the three V1 consumers (`runtime-fallback/first-prompt-watchdog.ts`, `session-notification.ts`, `ralph-loop/event-handler-activity.ts`) sleep on V2. Only assistant steps are synthesized today. |
+| V1 `message.part.updated` / `message.part.delta` | **Closed** (`c9c87efbe` + the part synthesis): V2 has no part objects, so both are rebuilt from `session.text.*`, `session.reasoning.*`, `session.tool.*` and `session.message.content.updated`, with a derived part id (`<assistantMessageID>:<kind>:<ordinal>`) that ties a start/delta/end to one part. Also mapped: `session.execution.interrupted` → V1 `session.stop`. Live capture: `../../.omo/evidence/20261016-v2-shim-parity-gaps/out/probe10-part-events.txt`. |
+| V1 `message.removed` / `message.part.removed` | Deliberately unmapped. The nearest V2 events are `session.revert.staged` (carries `messageID`/`partID` of the revert point) and `session.revert.committed` (carries only `to`), and neither names the messages that were removed, so firing `message.removed` would mean guessing ids. One handler is affected: `handleMessageRemovedEvent` → `restoreBackgroundOutputConsumption` in `plugin/event-session-lifecycle.ts:117`. |
 | npm publishing | Not done in this fork. The published package still exports the V1 `{id, server}` shape and is rejected by 2.0.11; shipping the V2 adapter goes through the release workflow. |
 
 ## 8. How to re-verify

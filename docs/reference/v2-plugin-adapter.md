@@ -183,6 +183,15 @@ stream — a stateless `toV1Event` cannot carry `started`'s identity into `ended
 export for single events, and bound the mapper's pending map (`maxPendingSteps`) so a step that never
 ends cannot leak.
 
+V1 part events are the same story at a finer grain: `message.part.updated` / `message.part.delta` are
+rebuilt from `session.text.*`, `session.reasoning.*`, `session.tool.*` and
+`session.message.content.updated`, because a V2 stream event carries only the assistant message id and
+an ordinal. Derive the part id deterministically (`<messageID>:<kind>:<ordinal>`) so a start, its
+deltas and its end all address one part, keep `field` honest (`"text"` for text, `"reasoning"` for
+reasoning — several handlers count a `field: "text"` delta as assistant output), and put the tool
+phase into `part.state.status`. Anything still unmapped is dropped, not guessed: `message.removed`
+has no V2 counterpart that names the removed message.
+
 A V1 event can also be **missing because the host delivered it before anyone was listening**. That is
 the `session.created` case: keep a set of the sessions the stream has accounted for, mark a session on
 its real creation, and announce a synthetic one on that session's first other event. Deliver the
@@ -354,7 +363,8 @@ runs inside the host.
 | Gap | State |
 |---|---|
 | TUI sidebar plugin | **Ported.** `src/tui.ts` exports `{ ...v1Module, ...createV2TuiDefinition() }`: 1.x reads `tui`, 2.x reads `setup`. The 2.x path claims `context.ui.slot({ append: "sidebar.content" })` and publishes the view through `context.storage.memory` so the slot re-renders (no manual `requestRender`). `shared/opencode-client-config.ts` picks `cli.json` + `plugins` on 2.x and `tui.json` + `plugin` on 1.x for both the installer and the doctor. See `p6-b12-tui-plugin-port.md`. |
-| `message.part.updated` | Unmapped. V2 streams parts as `session.text.*` / `session.reasoning.*`, so the three V1 consumers (`runtime-fallback/first-prompt-watchdog.ts`, `session-notification.ts`, `ralph-loop/event-handler-activity.ts`) sleep on V2. Only assistant steps are synthesized. |
+| `message.part.updated` / `message.part.delta` | **Ported by synthesis.** V2 has no part objects, so a part is rebuilt from `session.text.*`, `session.reasoning.*`, `session.tool.*` and `session.message.content.updated`, addressed by a derived id. `session.execution.interrupted` is mapped to V1 `session.stop`. Capture: `out/probe10-part-events.txt` in `20261016-v2-shim-parity-gaps/`. |
+| `message.removed` / `message.part.removed` | Deliberately unmapped: no V2 event names the removed messages (`session.revert.staged` carries the revert point, `session.revert.committed` only its target), so `restoreBackgroundOutputConsumption` cannot be triggered without guessing ids. |
 | Session title in tool output | `session_list` and `session_info` do not print a session title. Pre-existing formatter behavior. |
 | `reasoningEffort` for unknown model families | omo's shared capability guard drops the effort on purpose; identical on V1. |
 | Mid-turn compaction continuation | Host-native, verified; nothing to implement. |

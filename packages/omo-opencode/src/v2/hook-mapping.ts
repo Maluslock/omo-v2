@@ -13,9 +13,12 @@ import { isRecord } from "../shared"
  * and is dropped rather than mis-dispatched. The V2 vocabulary is ~130 types (see
  * `docs/superpowers/notes/2026-09-23-v2-hook-injection-findings.md`).
  *
- * One mapping is a synthesis, not a rename: V2 has no `message.updated`, so it is rebuilt from
- * `session.step.started` + `session.step.ended` (`createV1EventMapper`), which is what keeps the
- * `message.updated`-keyed hooks (preemptive compaction and friends) alive on V2.
+ * Two mappings are a synthesis, not a rename: V2 has no `message.updated` (rebuilt from
+ * `session.step.started` + `session.step.ended` by `createV1EventMapper`) and no message parts
+ * (rebuilt from `session.text.*`, `session.reasoning.*`, `session.tool.*` and
+ * `session.message.content.updated`). Between them they keep the `message.updated`- and
+ * `message.part.*`-keyed hooks - preemptive compaction, runtime fallback, the todo enforcer,
+ * notifications, activity tracking - alive on V2.
  *
  * Verified against a live `GET /api/event` capture on opencode v2.0.11 for `session.created`, and
  * against a full-catalog live capture for the turn envelope (`live-v2-event-catalog.md`: one prompt
@@ -58,6 +61,29 @@ export const V2_EVENT_TO_V1: Readonly<Record<string, string>> = Object.freeze({
   // this — their `tokenCache`/state is only ever filled from `message.updated`.
   "session.step.started": "message.updated",
   "session.step.ended": "message.updated",
+  // V2 has no message part objects either. It reports each stream as its own event family
+  // (`session.text.*`, `session.reasoning.*`, `session.tool.*`) and the assembled message as
+  // `session.message.content.updated`, while every activity-keyed V1 hook listens to
+  // `message.part.updated` / `message.part.delta` (the first-prompt watchdog, the ralph loop, the
+  // notification scheduler, the todo continuation enforcer, compaction context injection, atlas and
+  // the background-notification forwarder). The part is rebuilt below with a deterministic id.
+  "session.text.started": "message.part.updated",
+  "session.text.delta": "message.part.delta",
+  "session.text.ended": "message.part.updated",
+  "session.reasoning.started": "message.part.updated",
+  "session.reasoning.delta": "message.part.delta",
+  "session.reasoning.ended": "message.part.updated",
+  "session.tool.input.started": "message.part.updated",
+  "session.tool.input.delta": "message.part.delta",
+  "session.tool.input.ended": "message.part.updated",
+  "session.tool.called": "message.part.updated",
+  "session.tool.progress": "message.part.updated",
+  "session.tool.success": "message.part.updated",
+  "session.tool.failed": "message.part.updated",
+  "session.message.content.updated": "message.part.updated",
+  // V2 spells the user interrupt `session.execution.interrupted`; V1 handlers keyed on
+  // `session.stop` (runtime fallback, the watchdog, the unstable-agent babysitter) never saw it.
+  "session.execution.interrupted": "session.stop",
 })
 
 /**
@@ -111,6 +137,35 @@ function identityFields(linked: LinkedStep | undefined): Record<string, unknown>
     ...(linked.providerID !== undefined ? { providerID: linked.providerID } : {}),
     ...(linked.modelID !== undefined ? { modelID: linked.modelID } : {}),
     ...(linked.agent !== undefined ? { agent: linked.agent } : {}),
+  }
+}
+
+/**
+ * V1 part ids belong to the host, but a V2 stream event carries none: only the assistant message id
+ * and an ordinal. Deriving the id keeps a start/delta/end sequence addressing one V1 part.
+ */
+function partIDFor(kind: string, messageID: string, ordinal: unknown): string {
+  return `${messageID}:${kind}:${typeof ordinal === "number" ? ordinal : 0}`
+}
+
+/** The `{id, sessionID, role}` every activity-keyed part handler resolves a session from. */
+function assistantInfo(messageID: string, sessionID: string): Record<string, unknown> {
+  return { id: messageID, sessionID, role: "assistant" }
+}
+
+/** V1 tool parts carry `state.status`; V2 reports each phase of a tool call as its own event. */
+function toolStateOf(v2Type: string, data: Record<string, unknown>): Record<string, unknown> {
+  const status =
+    v2Type === "session.tool.success" ? "completed" : v2Type === "session.tool.failed" ? "error" : "running"
+  const input = data.input ?? (typeof data.text === "string" ? data.text : undefined)
+  return {
+    status,
+    ...(input !== undefined ? { input } : {}),
+    ...(data.content !== undefined ? { output: data.content } : {}),
+    ...(data.error !== undefined ? { error: data.error } : {}),
+    ...(isRecord(data.metadata) ? { metadata: data.metadata } : {}),
+    ...(data.executed !== undefined ? { executed: data.executed } : {}),
+    ...(data.resultState !== undefined ? { resultState: data.resultState } : {}),
   }
 }
 
@@ -210,6 +265,104 @@ function buildProperties(
         },
       }
     }
+    // A part stream (text or reasoning) starts and ends as `message.part.updated`; the chunk in
+    // between is `message.part.delta` with the V1 `field`/`delta` pair the handlers read.
+    case "session.text.started":
+    case "session.text.ended":
+    case "session.reasoning.started":
+    case "session.reasoning.ended": {
+      const messageID = assistantMessageIDOf(data)
+      if (messageID === undefined || sessionID === undefined) return undefined
+      const kind = v2Type.startsWith("session.reasoning") ? "reasoning" : "text"
+      return {
+        sessionID,
+        messageID,
+        part: {
+          id: partIDFor(kind, messageID, data.ordinal),
+          messageID,
+          sessionID,
+          type: kind,
+          text: typeof data.text === "string" ? data.text : "",
+        },
+        info: assistantInfo(messageID, sessionID),
+      }
+    }
+    case "session.text.delta":
+    case "session.reasoning.delta": {
+      const messageID = assistantMessageIDOf(data)
+      const delta = typeof data.delta === "string" ? data.delta : undefined
+      if (messageID === undefined || sessionID === undefined || delta === undefined) return undefined
+      const kind = v2Type.startsWith("session.reasoning") ? "reasoning" : "text"
+      return {
+        sessionID,
+        messageID,
+        partID: partIDFor(kind, messageID, data.ordinal),
+        field: kind,
+        delta,
+        info: assistantInfo(messageID, sessionID),
+      }
+    }
+    case "session.tool.input.delta": {
+      const messageID = assistantMessageIDOf(data)
+      const partID = stringField(data, "id")
+      const delta = typeof data.delta === "string" ? data.delta : undefined
+      if (messageID === undefined || sessionID === undefined || partID === undefined || delta === undefined) {
+        return undefined
+      }
+      return {
+        sessionID,
+        messageID,
+        partID,
+        field: "input",
+        delta,
+        info: assistantInfo(messageID, sessionID),
+      }
+    }
+    case "session.tool.input.started":
+    case "session.tool.input.ended":
+    case "session.tool.called":
+    case "session.tool.progress":
+    case "session.tool.success":
+    case "session.tool.failed": {
+      const messageID = assistantMessageIDOf(data)
+      const partID = stringField(data, "id")
+      if (messageID === undefined || sessionID === undefined || partID === undefined) return undefined
+      const tool = stringField(data, "name")
+      return {
+        sessionID,
+        messageID,
+        part: {
+          id: partID,
+          messageID,
+          sessionID,
+          type: "tool",
+          ...(tool !== undefined ? { tool } : {}),
+          state: toolStateOf(v2Type, data),
+        },
+        info: assistantInfo(messageID, sessionID),
+      }
+    }
+    // The assembled message: V2 already hands over a part-shaped `content` (type, text, state, time).
+    case "session.message.content.updated": {
+      const messageID = stringField(data, "messageID")
+      const content = isRecord(data.content) ? data.content : undefined
+      if (messageID === undefined || sessionID === undefined || content === undefined) return undefined
+      const type = stringField(content, "type") ?? "content"
+      return {
+        sessionID,
+        messageID,
+        part: {
+          ...content,
+          id: stringField(content, "id") ?? partIDFor(type, messageID, undefined),
+          messageID,
+          sessionID,
+        },
+        info: assistantInfo(messageID, sessionID),
+      }
+    }
+    case "session.execution.interrupted":
+      if (sessionID === undefined) return undefined
+      return { sessionID }
     default:
       return Object.keys(data).length > 0 ? data : {}
   }

@@ -81,7 +81,7 @@ describe("toV1Event", () => {
 
   it("drops unmapped events", () => {
     expect(toV1Event({ type: "server.connected", data: {} })).toBeUndefined()
-    expect(toV1Event({ type: "session.text.delta", data: { sessionID: "ses_1" } })).toBeUndefined()
+    expect(toV1Event({ type: "session.usage.updated", data: { sessionID: "ses_1" } })).toBeUndefined()
     expect(isMappedV2Event({ type: "server.connected" })).toBe(false)
     expect(isMappedV2Event({ type: "session.idle" })).toBe(true)
   })
@@ -93,6 +93,136 @@ describe("toV1Event", () => {
     // A mapped type with no usable session id cannot be dispatched.
     expect(toV1Event({ type: "session.idle", data: {} })).toBeUndefined()
     expect(toV1Event({ type: "session.created", data: { sessionID: "" } })).toBeUndefined()
+  })
+
+  it("rebuilds a streaming text part as message.part.updated and message.part.delta", () => {
+    // V2 has no part objects: the text stream arrives as its own trio of events.
+    expect(
+      toV1Event({ type: "session.text.started", created: 1_000, data: { sessionID: "ses_1", assistantMessageID: "msg_1", ordinal: 0 } }),
+    ).toEqual({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          sessionID: "ses_1",
+          messageID: "msg_1",
+          part: { id: "msg_1:text:0", messageID: "msg_1", sessionID: "ses_1", type: "text", text: "" },
+          info: { id: "msg_1", sessionID: "ses_1", role: "assistant" },
+        },
+      },
+    })
+    expect(
+      toV1Event({
+        type: "session.text.delta",
+        created: 1_001,
+        data: { sessionID: "ses_1", assistantMessageID: "msg_1", ordinal: 0, delta: "hi" },
+      }),
+    ).toEqual({
+      event: {
+        type: "message.part.delta",
+        properties: {
+          sessionID: "ses_1",
+          messageID: "msg_1",
+          partID: "msg_1:text:0",
+          field: "text",
+          delta: "hi",
+          info: { id: "msg_1", sessionID: "ses_1", role: "assistant" },
+        },
+      },
+    })
+    // The end event carries the assembled text, and shares the id the delta addressed.
+    const ended = toV1Event({
+      type: "session.text.ended",
+      created: 1_002,
+      data: { sessionID: "ses_1", assistantMessageID: "msg_1", ordinal: 0, text: "hi there" },
+    })
+    expect(ended?.event.properties.part).toMatchObject({ id: "msg_1:text:0", type: "text", text: "hi there" })
+  })
+
+  it("keeps the reasoning stream out of the text field", () => {
+    // Handlers count `field: "text"` deltas as assistant output, so reasoning must not claim it.
+    const delta = toV1Event({
+      type: "session.reasoning.delta",
+      data: { sessionID: "ses_1", assistantMessageID: "msg_1", ordinal: 2, delta: "thinking" },
+    })
+    expect(delta?.event.properties).toMatchObject({ field: "reasoning", partID: "msg_1:reasoning:2" })
+    const started = toV1Event({
+      type: "session.reasoning.started",
+      data: { sessionID: "ses_1", assistantMessageID: "msg_1", ordinal: 2 },
+    })
+    expect(started?.event.properties.part).toMatchObject({ type: "reasoning", id: "msg_1:reasoning:2" })
+  })
+
+  it("rebuilds a tool call as a V1 tool part with a V1 status", () => {
+    const called = toV1Event({
+      type: "session.tool.called",
+      data: { sessionID: "ses_1", assistantMessageID: "msg_1", id: "call_1", name: "bash", input: { command: "ls" } },
+    })
+    expect(called?.event.properties.part).toEqual({
+      id: "call_1",
+      messageID: "msg_1",
+      sessionID: "ses_1",
+      type: "tool",
+      tool: "bash",
+      state: { status: "running", input: { command: "ls" } },
+    })
+    const succeeded = toV1Event({
+      type: "session.tool.success",
+      data: {
+        sessionID: "ses_1",
+        assistantMessageID: "msg_1",
+        id: "call_1",
+        name: "bash",
+        content: [{ type: "text", text: "ok" }],
+      },
+    })
+    expect(succeeded?.event.properties.part).toMatchObject({
+      type: "tool",
+      state: { status: "completed", output: [{ type: "text", text: "ok" }] },
+    })
+    const failed = toV1Event({
+      type: "session.tool.failed",
+      data: { sessionID: "ses_1", assistantMessageID: "msg_1", id: "call_1", error: { message: "nope" } },
+    })
+    expect(failed?.event.properties.part).toMatchObject({ state: { status: "error", error: { message: "nope" } } })
+    // Streamed tool input is a delta, addressed to the same tool part id.
+    const inputDelta = toV1Event({
+      type: "session.tool.input.delta",
+      data: { sessionID: "ses_1", assistantMessageID: "msg_1", id: "call_1", delta: '{"com' },
+    })
+    expect(inputDelta?.event.properties).toMatchObject({ partID: "call_1", field: "input", delta: '{"com' })
+  })
+
+  it("passes the assembled message content through as a part", () => {
+    const converted = toV1Event({
+      type: "session.message.content.updated",
+      data: {
+        sessionID: "ses_1",
+        messageID: "msg_1",
+        content: { type: "text", text: "hello", state: "completed", time: { created: 1, completed: 2 } },
+      },
+    })
+    expect(converted?.event.properties.part).toEqual({
+      type: "text",
+      text: "hello",
+      state: "completed",
+      time: { created: 1, completed: 2 },
+      id: "msg_1:text:0",
+      messageID: "msg_1",
+      sessionID: "ses_1",
+    })
+  })
+
+  it("maps the V2 interrupt onto the V1 session.stop", () => {
+    expect(toV1Event({ type: "session.execution.interrupted", data: { sessionID: "ses_1" } })).toEqual({
+      event: { type: "session.stop", properties: { sessionID: "ses_1" } },
+    })
+  })
+
+  it("drops a part event that cannot address a message or session", () => {
+    expect(toV1Event({ type: "session.text.delta", data: { sessionID: "ses_1", delta: "hi" } })).toBeUndefined()
+    expect(toV1Event({ type: "session.text.delta", data: { assistantMessageID: "msg_1", delta: "hi" } })).toBeUndefined()
+    expect(toV1Event({ type: "session.text.delta", data: { sessionID: "ses_1", assistantMessageID: "msg_1" } })).toBeUndefined()
+    expect(toV1Event({ type: "session.tool.success", data: { sessionID: "ses_1", assistantMessageID: "msg_1" } })).toBeUndefined()
   })
 
   it("keeps the rename table self-consistent", () => {

@@ -90,7 +90,13 @@ export default {
             type === "session.execution.failed" ||
             // Recorded raw as well, so a `session.created` that only reaches the V1 pipeline can be
             // told apart from one the host actually put on the wire.
-            type === "session.created"
+            type === "session.created" ||
+            // The streams the V1 part events are rebuilt from.
+            type.startsWith("session.text.") ||
+            type.startsWith("session.reasoning.") ||
+            type.startsWith("session.tool.") ||
+            type === "session.message.content.updated" ||
+            type === "session.execution.interrupted"
           ) {
             record("event", { type, sessionID: event?.data?.sessionID ?? null })
           }
@@ -112,7 +118,22 @@ export default {
       subscribe: (options: Any) => ctx.event.subscribe(options ?? {}),
       dispatch: (input: Any) => {
         const type = input?.event?.type
-        if (type !== "message.updated" && type !== "session.created") return
+        if (type !== "message.updated" && type !== "session.created") {
+          // The part events, which exist in V1 only: V2 streams `session.text.*` /
+          // `session.reasoning.*` / `session.tool.*`, so a record here is the rebuilt part.
+          if (type !== "message.part.updated" && type !== "message.part.delta" && type !== "session.stop") return
+          const properties = (input?.event?.properties ?? {}) as Record<string, unknown>
+          const part = (properties.part ?? {}) as Record<string, unknown>
+          record("v1part", {
+            type,
+            sessionID: properties.sessionID ?? part.sessionID ?? null,
+            partType: part.type ?? null,
+            partID: properties.partID ?? part.id ?? null,
+            field: properties.field ?? null,
+            messageID: properties.messageID ?? null,
+          })
+          return
+        }
         const info = (input?.event?.properties?.info ?? {}) as Record<string, unknown>
         if (type === "session.created") {
           record("v1event", { type, id: info.id ?? null, title: info.title ?? null })

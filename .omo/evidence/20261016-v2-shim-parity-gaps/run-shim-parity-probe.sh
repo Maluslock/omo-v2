@@ -302,6 +302,15 @@ print('V1_MESSAGE_UPDATED_TIME=%s' % ('yes' if any(r.get('timeCreated') and r.ge
 print('V1_SESSION_CREATED=%s' % (','.join(sorted(v1_created_ids)) or 'NONE'))
 print('RAW_SESSION_CREATED=%s' % (','.join(sorted(raw_created_ids)) or 'NONE'))
 print('V1_CREATED_WITHOUT_RAW=%s' % (','.join(sorted(v1_created_ids - raw_created_ids)) or 'NONE'))
+parts = [row for row in rows if row.get('label') == 'v1part']
+part_updated = [row for row in parts if row.get('type') == 'message.part.updated']
+part_delta = [row for row in parts if row.get('type') == 'message.part.delta']
+print('V1_PART_UPDATED=%d' % len(part_updated))
+print('V1_PART_DELTA=%d' % len(part_delta))
+print('V1_PART_KINDS=%s' % (','.join(sorted({r.get('partType') for r in part_updated if r.get('partType')})) or 'NONE'))
+print('V1_PART_FIELDS=%s' % (','.join(sorted({r.get('field') for r in part_delta if r.get('field')})) or 'NONE'))
+print('V1_SESSION_STOP=%d' % len([row for row in parts if row.get('type') == 'session.stop']))
+print('RAW_STREAM_TYPES=%s' % (','.join(sorted({row.get('type') for row in rows if row.get('label') == 'event'})) or 'NONE'))
 if not setup:
     print('ERROR=probe_setup_missing')
 elif not registered:

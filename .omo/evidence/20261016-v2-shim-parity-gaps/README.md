@@ -21,10 +21,14 @@ interrupt.
 | 4 | `message.updated` rebuilt from the V2 step events | **works** | `V1_MESSAGE_UPDATED=3`, `V1_MESSAGE_UPDATED_FINISHED=1`, `ROLE=assistant`, `PROVIDER=mock`, `MODEL=mock-1`, `TOKENS=yes`, `TIME=yes` — see `out/probe8-v1events.txt` |
 | 5 | `session.created` announced for a session that predates the subscription | **works** | `V1_SESSION_CREATED` lists all three sessions but `RAW_SESSION_CREATED` only the two created after the plugin loaded: `V1_CREATED_WITHOUT_RAW=ses_ebc23254affe8A5G0ryhk3bUmc` - the donor session, announced in the same millisecond as its first `message.updated`, while the driver and child kept their real, titled events — see `out/probe9-created-events.txt` |
 
+| 6 | `message.part.updated` / `message.part.delta` rebuilt from the V2 part streams, and the interrupt mapped to `session.stop` | **works** | `V1_PART_UPDATED=6`, `V1_PART_DELTA=1`, `V1_PART_KINDS=text,tool`, `V1_PART_FIELDS=text`, `V1_SESSION_STOP=1`, while the raw stream carried only `session.text.*` / `session.tool.*` / `session.execution.interrupted` (`RAW_STREAM_TYPES` in the same capture) — see `out/probe10-parts.txt` |
+
 Verdicts 1–3 come from the same run (`out/probe7-shim-parity.txt`); verdict 4 is the next run of the
 same runner (`out/probe8-shim-parity-mapper.txt`), after the probe gained the V1 pipeline; verdict 5 is
 the run after that (`out/probe9-session-created.txt`), which also records the raw stream so a
-synthesized creation can be told from a delivered one.
+synthesized creation can be told from a delivered one. Verdict 6 is the last
+run (`out/probe10-part-events.txt`), where the probe's V1 recorder also counts the part events and the
+interrupt.
 
 `ISO=ISO_OK` (`297` → `297` rows in the real `~/.local/share/opencode/opencode.db`): every session
 this run created lives in the throwaway XDG root.
@@ -52,6 +56,9 @@ this document was copied here:
 | `out/probe9-session-created.txt` | the verdicts again, now with `V1_SESSION_CREATED` / `RAW_SESSION_CREATED` / `V1_CREATED_WITHOUT_RAW` |
 | `out/probe9-created-events.txt` | every `session.created`, raw and V1, in order |
 | `out/probe9-probe.jsonl` / `out/probe9-probe-records.txt` | the full NDJSON of that run, and the records alone |
+| `out/probe10-part-events.txt` | the verdicts again, now with `V1_PART_UPDATED` / `V1_PART_DELTA` / `V1_PART_KINDS` / `V1_PART_FIELDS` / `V1_SESSION_STOP` / `RAW_STREAM_TYPES` |
+| `out/probe10-parts.txt` | every rebuilt part event and `session.stop`, in order, with the id that ties a start/delta/end to one part |
+| `out/probe10-probe.jsonl` / `out/probe10-probe-records.txt` | the full NDJSON of that run, and the records alone |
 
 ## How each verdict is obtained
 
@@ -80,6 +87,19 @@ first turn), so its creation is on no subscriber's stream; the V1 pipeline still
 same millisecond as its first `message.updated` (`title: null` - the payload that would have carried the
 title is gone). The driver and child sessions were created while the plugin was live, and each kept its
 single real event, title included: nothing was announced twice.
+
+**Verdict 6** needs no new machinery: the same recorder was widened to the part events and
+`session.stop`. The raw stream of that run contains no `message.part.*` at all - it carries
+`session.text.started/delta/ended`, `session.tool.input.started/input.ended/called/failed` and
+`session.execution.interrupted` - yet six `message.part.updated`, one `message.part.delta` and one
+`session.stop` reached the V1 pipeline. The donor's text part is the whole V1 lifecycle on one id
+(`msg_…:text:0`): `updated` (empty text) → `delta` (`field: "text"`) → `updated` (assembled text); the
+driver's tool call is four `updated` events on its call id, ending in `error`; and the `session.stop`
+lands after them, at the interrupt. Those are the events the activity-keyed hooks listen to
+(`packages/omo-opencode/src/hooks/runtime-fallback/first-prompt-watchdog.ts:72`,
+`…/ralph-loop/event-handler-activity.ts:37`, `…/session-notification.ts:121`,
+`…/compaction-context-injector/hook.ts:143`, `…/atlas/event-handler.ts:66`,
+`…/todo-continuation-enforcer/non-idle-events.ts:162`), which were all dormant on V2 before it.
 
 **Verdict 4** reuses the same runner and sessions, but the probe also starts the production V2 → V1
 pipeline (`startV2EventSubscription` from `packages/omo-opencode/src/v2/event-subscription.ts`,
