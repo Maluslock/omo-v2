@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test"
 import {
   registerOmoCompactionHook,
   registerOmoMessagesHook,
+  registerOmoSessionPromptConfigHook,
   registerOmoSystemHook,
   registerOmoToolHooks,
 } from "./register-hooks"
@@ -202,6 +203,53 @@ describe("registerOmoSystemHook", () => {
     await registerOmoSystemHook(registrar, () => { called += 1 })
     await invoke("context", { sessionID: "ses_1" })
     expect(called).toBe(0)
+  })
+})
+
+describe("registerOmoSessionPromptConfigHook", () => {
+  it("replays the recorded system content and tool denials onto the request", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    await registerOmoSessionPromptConfigHook(registrar, (sessionID) =>
+      sessionID === "ses_1" ? { system: ["skill body"], tools: { bash: false, task: false, read: true } } : undefined,
+    )
+
+    const event: Record<string, unknown> = {
+      sessionID: "ses_1",
+      system: [{ type: "text", text: "base" }],
+      tools: { shell: {}, subagent: {}, read: {} },
+    }
+    await invoke("context", event)
+
+    expect(event.system).toEqual([
+      { type: "text", text: "base" },
+      { type: "text", text: "skill body" },
+    ])
+    expect(Object.keys(event.tools as Record<string, unknown>)).toEqual(["read"])
+  })
+
+  it("leaves the request untouched for a session with no recorded config", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    await registerOmoSessionPromptConfigHook(registrar, () => undefined)
+
+    const event: Record<string, unknown> = {
+      sessionID: "ses_1",
+      system: [{ type: "text", text: "base" }],
+      tools: { shell: {} },
+    }
+    await invoke("context", event)
+    expect(event.system).toEqual([{ type: "text", text: "base" }])
+    expect(Object.keys(event.tools as Record<string, unknown>)).toEqual(["shell"])
+  })
+
+  it("ignores context events without a session id", async () => {
+    const { registrar, invoke } = createSessionRegistrar()
+    let calls = 0
+    await registerOmoSessionPromptConfigHook(registrar, () => {
+      calls += 1
+      return { tools: { bash: false } }
+    })
+    await invoke("context", { tools: { shell: {} } })
+    expect(calls).toBe(0)
   })
 })
 

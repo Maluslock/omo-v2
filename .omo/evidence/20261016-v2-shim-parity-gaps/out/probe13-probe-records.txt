@@ -1,0 +1,48 @@
+{"at": 1792141139793, "hasEventSubscribe": "function", "hasSessionCompact": "function", "hasSessionCreate": "function", "hasSessionGet": "function", "hasToolTransform": "function", "label": "setup"}
+{"at": 1792141140106, "hasAbortMethod": "function", "hasCreate": "function", "hasSummarize": "function", "label": "shim"}
+{"at": 1792141140115, "label": "promptconfig.hook.registered", "ok": true}
+{"at": 1792141140120, "label": "registered", "name": "zz_shim_probe", "namespace": "zzprobe"}
+{"at": 1792141140314, "label": "event", "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "type": "session.execution.started"}
+{"at": 1792141140450, "id": "ses_ebc106379ffe9o98ks1pR18sKJ", "label": "v1event", "title": null, "type": "session.created"}
+{"agent": "build", "at": 1792141140450, "finish": null, "hasTokens": false, "id": "msg_143efa16f001npF4EhCdkG1RsH", "label": "v1event", "modelID": "mock-1", "providerID": "mock", "role": "assistant", "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "timeCompleted": null, "timeCreated": 1792141140371, "type": "message.updated"}
+{"at": 1792141140450, "label": "event", "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "type": "session.text.started"}
+{"at": 1792141140452, "label": "event", "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "type": "session.text.delta"}
+{"at": 1792141140452, "field": null, "label": "v1part", "messageID": "msg_143efa16f001npF4EhCdkG1RsH", "partID": "msg_143efa16f001npF4EhCdkG1RsH:text:0", "partType": "text", "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "type": "message.part.updated"}
+{"at": 1792141140453, "label": "event", "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "type": "session.text.ended"}
+{"at": 1792141140453, "field": "text", "label": "v1part", "messageID": "msg_143efa16f001npF4EhCdkG1RsH", "partID": "msg_143efa16f001npF4EhCdkG1RsH:text:0", "partType": null, "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "type": "message.part.delta"}
+{"at": 1792141140455, "field": null, "label": "v1part", "messageID": "msg_143efa16f001npF4EhCdkG1RsH", "partID": "msg_143efa16f001npF4EhCdkG1RsH:text:0", "partType": "text", "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "type": "message.part.updated"}
+{"at": 1792141140455, "label": "event", "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "type": "session.execution.succeeded"}
+{"agent": "build", "at": 1792141140458, "finish": "stop", "hasTokens": true, "id": "msg_143efa16f001npF4EhCdkG1RsH", "label": "v1event", "modelID": "mock-1", "providerID": "mock", "role": "assistant", "sessionID": "ses_ebc106379ffe9o98ks1pR18sKJ", "timeCompleted": 1792141140430, "timeCreated": 1792141140371, "type": "message.updated"}
+{"at": 1792141142332, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.created"}
+{"at": 1792141142332, "id": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "label": "v1event", "title": "shim probe driver", "type": "session.created"}
+{"at": 1792141142493, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.execution.started"}
+{"agent": "build", "at": 1792141142536, "finish": null, "hasTokens": false, "id": "msg_143efa9c20018cM4n4q7TtlAmW", "label": "v1event", "modelID": "mock-1", "providerID": "mock", "role": "assistant", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "timeCompleted": null, "timeCreated": 1792141142489, "type": "message.updated"}
+{"at": 1792141142536, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.tool.input.started"}
+{"at": 1792141142537, "field": null, "label": "v1part", "messageID": "msg_143efa9c20018cM4n4q7TtlAmW", "partID": "call_mock_1792141142494", "partType": "tool", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.updated"}
+{"at": 1792141142537, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.tool.input.ended"}
+{"at": 1792141142537, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.tool.called"}
+{"at": 1792141142537, "field": null, "label": "v1part", "messageID": "msg_143efa9c20018cM4n4q7TtlAmW", "partID": "call_mock_1792141142494", "partType": "tool", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.updated"}
+{"at": 1792141142537, "field": null, "label": "v1part", "messageID": "msg_143efa9c20018cM4n4q7TtlAmW", "partID": "call_mock_1792141142494", "partType": "tool", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.updated"}
+{"abortIsAbortSignal": true, "at": 1792141142543, "label": "tool.start", "mode": "session-prompt-config", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr"}
+{"at": 1792141142597, "label": "promptconfig.sent", "ok": true, "recorded": {"system": ["ZZPROBE_SYSTEM_MARKER"], "tools": {"bash": false, "task": false}}, "returnedId": "msg_143efaa11001tFTLd67JSxWi1U", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr"}
+{"at": 1792141142650, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.tool.success"}
+{"at": 1792141142650, "field": null, "label": "v1part", "messageID": "msg_143efa9c20018cM4n4q7TtlAmW", "partID": "call_mock_1792141142494", "partType": "tool", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.updated"}
+{"agent": "build", "at": 1792141142650, "finish": "tool-calls", "hasTokens": true, "id": "msg_143efa9c20018cM4n4q7TtlAmW", "label": "v1event", "modelID": "mock-1", "providerID": "mock", "role": "assistant", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "timeCompleted": 1792141142606, "timeCreated": 1792141142489, "type": "message.updated"}
+{"agent": "build", "at": 1792141142684, "finish": null, "hasTokens": false, "id": "msg_143efaa63001ZDfA1KH5o1Mh2m", "label": "v1event", "modelID": "mock-1", "providerID": "mock", "role": "assistant", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "timeCompleted": null, "timeCreated": 1792141142647, "type": "message.updated"}
+{"at": 1792141142707, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.text.started"}
+{"at": 1792141142707, "field": null, "label": "v1part", "messageID": "msg_143efaa63001ZDfA1KH5o1Mh2m", "partID": "msg_143efaa63001ZDfA1KH5o1Mh2m:text:0", "partType": "text", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.updated"}
+{"at": 1792141142707, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.text.delta"}
+{"at": 1792141142707, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.text.ended"}
+{"at": 1792141142708, "field": "text", "label": "v1part", "messageID": "msg_143efaa63001ZDfA1KH5o1Mh2m", "partID": "msg_143efaa63001ZDfA1KH5o1Mh2m:text:0", "partType": null, "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.delta"}
+{"at": 1792141142708, "field": null, "label": "v1part", "messageID": "msg_143efaa63001ZDfA1KH5o1Mh2m", "partID": "msg_143efaa63001ZDfA1KH5o1Mh2m:text:0", "partType": "text", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.updated"}
+{"agent": "build", "at": 1792141142708, "finish": "stop", "hasTokens": true, "id": "msg_143efaa63001ZDfA1KH5o1Mh2m", "label": "v1event", "modelID": "mock-1", "providerID": "mock", "role": "assistant", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "timeCompleted": 1792141142668, "timeCreated": 1792141142647, "type": "message.updated"}
+{"agent": "build", "at": 1792141142730, "finish": null, "hasTokens": false, "id": "msg_143efaa9f001GQu4RcHN0IsKOG", "label": "v1event", "modelID": "mock-1", "providerID": "mock", "role": "assistant", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "timeCompleted": null, "timeCreated": 1792141142704, "type": "message.updated"}
+{"at": 1792141142730, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.text.started"}
+{"at": 1792141142730, "field": null, "label": "v1part", "messageID": "msg_143efaa9f001GQu4RcHN0IsKOG", "partID": "msg_143efaa9f001GQu4RcHN0IsKOG:text:0", "partType": "text", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.updated"}
+{"at": 1792141142730, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.text.delta"}
+{"at": 1792141142730, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.text.ended"}
+{"at": 1792141142731, "field": "text", "label": "v1part", "messageID": "msg_143efaa9f001GQu4RcHN0IsKOG", "partID": "msg_143efaa9f001GQu4RcHN0IsKOG:text:0", "partType": null, "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.delta"}
+{"at": 1792141142731, "field": null, "label": "v1part", "messageID": "msg_143efaa9f001GQu4RcHN0IsKOG", "partID": "msg_143efaa9f001GQu4RcHN0IsKOG:text:0", "partType": "text", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "message.part.updated"}
+{"agent": "build", "at": 1792141142731, "finish": "stop", "hasTokens": true, "id": "msg_143efaa9f001GQu4RcHN0IsKOG", "label": "v1event", "modelID": "mock-1", "providerID": "mock", "role": "assistant", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "timeCompleted": 1792141142726, "timeCreated": 1792141142704, "type": "message.updated"}
+{"at": 1792141142735, "label": "event", "sessionID": "ses_ebc1056d2ffe2uHBtTOPyYf7hr", "type": "session.execution.succeeded"}
+{"at": 1792141347925, "label": "v1event.stream", "settled": true}

@@ -103,6 +103,8 @@ describe("registerOmoHooks", () => {
       "context",
       "context",
       "context",
+      // the per-session request config the client shim records (V2-only, see session-prompt-config.ts)
+      "context",
       // chat.headers adds a prompt registration (message-id tracker) and a model.request registration
       "prompt",
       "model.request",
@@ -119,7 +121,7 @@ describe("registerOmoHooks", () => {
 
     expect(calls.subscribe).toBe(2)
     expect(calls.toolHooks).toHaveLength(2)
-    expect(calls.sessionHooks).toHaveLength(7)
+    expect(calls.sessionHooks).toHaveLength(8)
     expect(calls.createdPluginInterfaces).toBe(1)
   })
 
@@ -133,6 +135,7 @@ describe("registerOmoHooks", () => {
       "tool:execute.before",
       "tool:execute.after",
       "session:prompt",
+      "session:context",
       "session:context",
       "session:context",
       "session:context",

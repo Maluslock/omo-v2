@@ -2,6 +2,7 @@
 import { isRecord, log } from "../shared"
 import { toV1Message, type V1ShimMessage } from "./client-shim-messages"
 import { sessionActivityStatuses } from "./session-activity"
+import { recordSessionPromptConfig } from "./session-prompt-config"
 
 /**
  * V1-client shim reconstructed from OpenCode V2 plugin domain APIs.
@@ -27,7 +28,9 @@ import { sessionActivityStatuses } from "./session-activity"
  *   body fields have no V2 counterpart (compact uses the session's own model) and are dropped with
  *   one warning.
  * - `session.prompt` accepts no `agent`/`model`/`system`/`tools`/generation params; the shim
- *   maps `agent`/`model` onto `switchAgent`/`switchModel` and warns once about the rest.
+ *   maps `agent`/`model` onto `switchAgent`/`switchModel`, RECORDS `system`/`tools` for the session
+ *   so the V2 `context` hook can apply them to the request (`session-prompt-config.ts`), and warns
+ *   once about the generation params, which the agent's own registration already carries.
  * - `session.todo` has no V2 domain equivalent and is an honest empty stub. `session.status` has no
  *   domain method either, but is reconstructed from the host event stream so the background manager
  *   does not mistake a live subagent for a gone session (`session-activity.ts`).
@@ -170,7 +173,7 @@ function promptFiles(body: Json): Json[] {
   return files
 }
 
-const UNMAPPABLE_PROMPT_KEYS = ["system", "tools", "temperature", "topP", "maxOutputTokens", "options"] as const
+const UNMAPPABLE_PROMPT_KEYS = ["temperature", "topP", "maxOutputTokens", "options"] as const
 
 /** V1 `session.summarize` body fields with no V2 `ctx.session.compact` counterpart. */
 const UNMAPPABLE_SUMMARIZE_KEYS = ["providerID", "modelID", "auto"] as const
@@ -212,6 +215,10 @@ export function createV1ClientShim(source: V2ClientShimSource): Json {
     }
     try {
       const created = normalizeSessionInfo(await session.create(request), queryDirectory ?? directory)
+      // V2's create input has no `system`/`tools`; hand them to the request-time bridge instead of
+      // dropping them, otherwise a delegated session loses its skill/runtime prompt and its tool
+      // restrictions (see `session-prompt-config.ts`).
+      recordSessionPromptConfig(created.id, { system: body.system, tools: body.tools })
       // Hosts before 2.0.30 have no `parentID` in the request schema and drop the field, so a
       // subagent session would silently lose its parent (and `session_v2.parent_id` stays null,
       // which makes omo's index list the child as a top-level session). Report the drop once
@@ -326,6 +333,10 @@ export function createV1ClientShim(source: V2ClientShimSource): Json {
         "[v2][client-shim] session.prompt: variant cannot be applied because no model was supplied",
       )
     }
+    // V2's prompt body is `{text, files, agents, skills, metadata, delivery, resume}`: the only way
+    // `system`/`tools` can still reach the request is the V2 `context` hook, so record them for this
+    // session instead of dropping them (the hook registration reads this store).
+    recordSessionPromptConfig(sessionID, { system: body.system, tools: body.tools })
     for (const key of UNMAPPABLE_PROMPT_KEYS) {
       if (body[key] !== undefined) {
         warnOnce(

@@ -5,7 +5,7 @@ import { createHooks } from "../create-hooks"
 import { createModelCacheState } from "../plugin-state"
 import { createPluginInterface } from "../plugin-interface"
 import { createSessionCompactingHandler } from "../plugin/session-compacting"
-import { log } from "../shared"
+import { isRecord, log } from "../shared"
 import { createFirstMessageVariantGate } from "../shared/first-message-variant"
 import { createPromptMessageTracker, registerOmoChatHeadersHook } from "./chat-headers-mapping"
 import { startCompactionEndRestore, type CompactionRestoreHooks } from "./compaction-end-restore"
@@ -15,12 +15,14 @@ import {
   registerOmoMessagesHook,
   registerOmoModelRequestHook,
   registerOmoPromptHook,
+  registerOmoSessionPromptConfigHook,
   registerOmoSystemHook,
   registerOmoToolHooks,
   type HookRegistration,
   type V2SessionHookRegistrar,
   type V2ToolHookRegistrar,
 } from "./register-hooks"
+import { clearSessionPromptConfig, getSessionPromptConfig } from "./session-prompt-config"
 import { omoRuntimeKeyFor, resolveOmoRuntime, type OmoRuntime } from "./register-tools"
 
 type V2Ctx = Parameters<NonNullable<Parameters<typeof Plugin.define>[0]["setup"]>>[0]
@@ -33,13 +35,14 @@ type V2Ctx = Parameters<NonNullable<Parameters<typeof Plugin.define>[0]["setup"]
  * builds two manager sets or two tool registries.
  *
  * Registered here: `event.subscribe`, `tool.hook(execute.before|execute.after)`,
- * `session.hook(prompt)` for `chat.message`, `session.hook(context)` for both the messages and
- * system transforms, and `session.hook(compaction)`.
+ * `session.hook(prompt)` for `chat.message`, `session.hook(context)` for the messages transform,
+ * the system transform, V1 `chat.params` and the per-session request config the shim records
+ * (`session-prompt-config.ts`), `session.hook("model.request")` for `chat.headers`, and
+ * `session.hook(compaction)`.
  *
- * Not registered (documented gaps, see the P3 findings): `chat.params`/`chat.headers` →
- * `session.hook("model.request")`, `tool.definition`, `command.execute.before`,
- * `experimental.compaction.autocontinue`, `permission.hook("evaluate")`, and
- * `shell.hook("create.before")`.
+ * Not registered (documented gaps, see the P3 findings): `tool.definition`,
+ * `command.execute.before`, `experimental.compaction.autocontinue`,
+ * `permission.hook("evaluate")`, and `shell.hook("create.before")`.
  */
 
 export type RegisterHooksDeps = {
@@ -100,6 +103,9 @@ async function registerSessionHooks(
   if (typeof chatParams === "function") {
     registrations.push(await registerOmoModelRequestHook(registrar, chatParams as never))
   }
+  // V2-only bridge: replays the `system`/`tools` a V1 create/prompt body carried, which the V2
+  // forms cannot hold (the client shim records them).
+  registrations.push(await registerOmoSessionPromptConfigHook(registrar, getSessionPromptConfig))
   const chatHeaders = handlers["chat.headers"]
   if (typeof chatHeaders === "function") {
     registrations.push(...(await registerOmoChatHeadersHook(registrar, chatHeaders as never, promptMessageTracker)))
@@ -135,7 +141,15 @@ function registerEventStream(
   if (typeof dispatch !== "function") return
   const subscription = startV2EventSubscription({
     subscribe: (options) => event.subscribe(options) as AsyncIterable<unknown>,
-    dispatch: (input) => dispatch(input as never),
+    dispatch: (input) => {
+      // A deleted session's recorded request config can never be read again, so drop it instead of
+      // waiting for the bounded store to evict it.
+      if (input.event.type === "session.deleted") {
+        const info = input.event.properties.info
+        if (isRecord(info)) clearSessionPromptConfig(info.id)
+      }
+      return dispatch(input as never)
+    },
   })
   disposals.push(() => subscription.dispose())
 }

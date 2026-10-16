@@ -20,15 +20,17 @@ interrupt.
 | 3 | tools receive the host's own `AbortSignal` | **works** | `ABORT_OBSERVED=yes`, `ABORT_OUTCOME=aborted`, `ABORT_ABORTED=True` ~2s after `POST /api/session/{sessionID}/interrupt` |
 | 4 | `message.updated` rebuilt from the V2 step events | **works** | `V1_MESSAGE_UPDATED=3`, `V1_MESSAGE_UPDATED_FINISHED=1`, `ROLE=assistant`, `PROVIDER=mock`, `MODEL=mock-1`, `TOKENS=yes`, `TIME=yes` — see `out/probe8-v1events.txt` |
 | 5 | `session.created` announced for a session that predates the subscription | **works** | `V1_SESSION_CREATED` lists all three sessions but `RAW_SESSION_CREATED` only the two created after the plugin loaded: `V1_CREATED_WITHOUT_RAW=ses_ebc23254affe8A5G0ryhk3bUmc` - the donor session, announced in the same millisecond as its first `message.updated`, while the driver and child kept their real, titled events — see `out/probe9-created-events.txt` |
-
 | 6 | `message.part.updated` / `message.part.delta` rebuilt from the V2 part streams, and the interrupt mapped to `session.stop` | **works** | `V1_PART_UPDATED=6`, `V1_PART_DELTA=1`, `V1_PART_KINDS=text,tool`, `V1_PART_FIELDS=text`, `V1_SESSION_STOP=1`, while the raw stream carried only `session.text.*` / `session.tool.*` / `session.execution.interrupted` (`RAW_STREAM_TYPES` in the same capture) — see `out/probe10-parts.txt` |
+| 7 | V1 `system` / `tools` on a create/prompt body, replayed onto the V2 request | **works** | the shim recorded `{system: ["ZZPROBE_SYSTEM_MARKER"], tools: {bash:false, task:false}}`, and the provider saw the difference: the two pre-recording requests kept the host's whole `MOCK_FIRST_REQUEST_TOOLS` set (`shell=yes subagent=yes`, 13 tools), the two after lost exactly those two (`marker=yes shell=no subagent=no`, 11 tools, `question` untouched) — `MOCK_REQUEST_ROW` in `out/probe13-session-prompt-config.txt`, with `MOCK_REQUESTS_WITH_HANDROLLED_MARKER=0` |
 
 Verdicts 1–3 come from the same run (`out/probe7-shim-parity.txt`); verdict 4 is the next run of the
 same runner (`out/probe8-shim-parity-mapper.txt`), after the probe gained the V1 pipeline; verdict 5 is
 the run after that (`out/probe9-session-created.txt`), which also records the raw stream so a
-synthesized creation can be told from a delivered one. Verdict 6 is the last
-run (`out/probe10-part-events.txt`), where the probe's V1 recorder also counts the part events and the
-interrupt.
+synthesized creation can be told from a delivered one. Verdict 6 is the run after that
+(`out/probe10-part-events.txt`), where the probe's V1 recorder also counts the part events and the
+interrupt. Verdict 7 is the last run (`out/probe13-session-prompt-config.txt`), where the probe also
+registers the production request-config bridge and the runner compares the provider requests made
+before and after the shim recorded a V1 body's `system`/`tools`.
 
 `ISO=ISO_OK` (`297` → `297` rows in the real `~/.local/share/opencode/opencode.db`): every session
 this run created lives in the throwaway XDG root.
@@ -59,6 +61,8 @@ this document was copied here:
 | `out/probe10-part-events.txt` | the verdicts again, now with `V1_PART_UPDATED` / `V1_PART_DELTA` / `V1_PART_KINDS` / `V1_PART_FIELDS` / `V1_SESSION_STOP` / `RAW_STREAM_TYPES` |
 | `out/probe10-parts.txt` | every rebuilt part event and `session.stop`, in order, with the id that ties a start/delta/end to one part |
 | `out/probe10-probe.jsonl` / `out/probe10-probe-records.txt` | the full NDJSON of that run, and the records alone |
+| `out/probe13-session-prompt-config.txt` | the verdicts again, now with `PROMPTCONFIG_*` and one `MOCK_REQUEST_ROW` per provider request |
+| `out/probe13-probe.jsonl` / `out/probe13-probe-records.txt` | the full NDJSON of that run (48 records), and the records alone |
 
 ## How each verdict is obtained
 
@@ -101,6 +105,23 @@ lands after them, at the interrupt. Those are the events the activity-keyed hook
 `…/compaction-context-injector/hook.ts:143`, `…/atlas/event-handler.ts:66`,
 `…/todo-continuation-enforcer/non-idle-events.ts:162`), which were all dormant on V2 before it.
 
+**Verdict 7** drives the other bridge omo needs, the per-session request config
+(`packages/omo-opencode/src/v2/session-prompt-config.ts`). V1's `session.create` / `session.prompt`
+body could carry `system` and `tools`; V2's forms have no such fields, so the shim hands them to the
+registry and the assembly replays them from the `context` hook. The probe registers the *production*
+replay hook (`registerOmoSessionPromptConfigHook` from `packages/omo-opencode/src/v2/register-hooks.ts`)
+the way `packages/omo-opencode/src/v2/register-hook-assembly.ts` does, then calls
+`shim.session.promptAsync` with `system: "ZZPROBE_SYSTEM_MARKER"` and `tools: {bash: false, task: false}`
+for the driver session. What the shim recorded (`PROMPTCONFIG_RECORDED_SYSTEM`,
+`PROMPTCONFIG_RECORDED_TOOLS=bash,task`) is only the middle of the chain; the verdict is the provider's
+view, printed per request as `MOCK_REQUEST_ROW`. The driver's requests before the recording carry the
+host's full advertised set (`shell=yes subagent=yes`, 13 tools); the requests after it carry the system
+part and lost exactly the two denied names through the action translation (`bash`→`shell`,
+`task`→`subagent`), leaving `question` in place. Run it with
+`SHIM_PROBE_MODE=session-prompt-config SHIM_PROBE_MUTATE_CONTEXT=0 SHIM_PROBE_SETTLE_SECONDS=8`:
+the hand-rolled `context` hook the probe uses for probe11/probe12 stays off, and it pushes a different
+literal, so `MOCK_REQUESTS_WITH_HANDROLLED_MARKER=0` proves the marker came from the production path.
+
 **Verdict 4** reuses the same runner and sessions, but the probe also starts the production V2 → V1
 pipeline (`startV2EventSubscription` from `packages/omo-opencode/src/v2/event-subscription.ts`,
 which owns the stateful `createV1EventMapper`) with a recorder in place of omo's assembled V1
@@ -141,11 +162,21 @@ its `ended` half never did, because the run interrupts it.
 - **Not** a full reconstruction of the missed creation. The announcement carries the session id and no
   title or `parentID`, because the event that would have carried them was never delivered; a hook that
   needs the title has to read the session.
-- **Not** a `message.updated`-for-every-part claim. Only assistant steps are synthesized (the
-  `session.step.*` pair); V1's `message.part.updated` remains unmapped and its consumers
-  (`packages/omo-opencode/src/hooks/runtime-fallback/first-prompt-watchdog.ts`,
+- **Not** a claim about what each part consumer does. Verdict 6 proves `message.part.updated`,
+  `message.part.delta` and `session.stop` reach the V1 pipeline on V2 with a stable part id; the
+  handlers that key off them (`packages/omo-opencode/src/hooks/runtime-fallback/first-prompt-watchdog.ts`,
   `packages/omo-opencode/src/hooks/session-notification.ts`,
-  `packages/omo-opencode/src/hooks/ralph-loop/event-handler-activity.ts`) still sleep on V2.
+  `packages/omo-opencode/src/hooks/ralph-loop/event-handler-activity.ts`) are covered by their own suites.
+- **Not** message-scoped semantics for verdict 7. In V1 the `system`/`tools` rode one create/prompt
+  body; this bridge is session-scoped, so it applies to every later request of that session until it is
+  replaced or the session is deleted - V2 has no message-scoped channel. The capture shows the *next*
+  requests, not "only that message's request".
+- **Not** proof that `registerOmoHooks` calls the bridge. The probe registers
+  `registerOmoSessionPromptConfigHook` directly (mirroring `packages/omo-opencode/src/v2/register-hook-assembly.ts`);
+  that the assembly wires it, with the other seven registrations and their disposal, is the unit test
+  in `packages/omo-opencode/src/v2/register-hook-assembly.test.ts`.
+- **Not** proof for delegated members or compaction requests. Only the ordinary prompt requests of the
+  two sessions in this run were observed.
 
 ## Two host facts this run pinned down
 

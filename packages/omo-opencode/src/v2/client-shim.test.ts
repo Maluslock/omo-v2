@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "bun:test"
 import { createV1ClientShim, resetClientShimWarningsForTesting } from "./client-shim"
 import type { V1ShimClient, V2ClientShimSource } from "./client-shim"
 import { observeSessionActivity, resetSessionActivityForTesting } from "./session-activity"
+import { getSessionPromptConfig, resetSessionPromptConfigs } from "./session-prompt-config"
 
 type Calls = {
   get: Array<Record<string, unknown>>
@@ -97,6 +98,7 @@ function createSource(overrides: Partial<V2ClientShimSource["session"]> = {}, ex
 
 beforeEach(() => {
   resetClientShimWarningsForTesting()
+  resetSessionPromptConfigs()
 })
 
 describe("createV1ClientShim session domain", () => {
@@ -146,6 +148,22 @@ describe("createV1ClientShim session domain", () => {
       },
     ])
     expect(result.data?.directory).toBe("/work/sub")
+  })
+
+  it("records the create body's system and tools for the new session instead of dropping them", async () => {
+    const { source, calls } = createSource()
+    const client: V1ShimClient = createV1ClientShim(source)
+    await client.session.create({
+      body: { title: "child", system: ["skill body"], tools: { task: false, bash: "deny" } },
+    })
+
+    // V2's create input cannot carry either field, so neither is forwarded ...
+    expect(calls.create).toEqual([{ title: "child", location: { directory: "/work" } }])
+    // ... and the request-time bridge reads them off the created session instead.
+    expect(getSessionPromptConfig("ses_new")).toEqual({
+      system: ["skill body"],
+      tools: { task: false, bash: "deny" },
+    })
   })
 
   it("still returns the session when the host ignores parentID instead of failing the create", async () => {
@@ -392,6 +410,25 @@ describe("createV1ClientShim prompt dispatch", () => {
     const client: V1ShimClient = createV1ClientShim(source)
     await client.session.prompt?.({ path: { id: "ses_1" }, body: { parts: [{ type: "text", text: "sync" }] } })
     expect(calls.prompt[0]?.["delivery"]).toBe("steer")
+  })
+
+  it("records the prompt body's system and tools for the session and forwards neither", async () => {
+    const { source, calls } = createSource()
+    const client: V1ShimClient = createV1ClientShim(source)
+    await client.session.promptAsync?.({
+      path: { id: "ses_1" },
+      body: {
+        system: "per-turn runtime prompt",
+        tools: { task: false },
+        parts: [{ type: "text", text: "go" }],
+      },
+    })
+
+    expect(calls.prompt).toEqual([{ sessionID: "ses_1", text: "go", delivery: "queue" }])
+    expect(getSessionPromptConfig("ses_1")).toEqual({
+      system: ["per-turn runtime prompt"],
+      tools: { task: false },
+    })
   })
 
   it("applies agent and model before prompting and maps modelID to id", async () => {

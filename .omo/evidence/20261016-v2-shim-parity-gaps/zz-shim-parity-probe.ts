@@ -162,6 +162,68 @@ export default {
       () => record("v1event.stream", { settled: false }),
     )
 
+    // Optional: prove whether the host honours a `context` hook that rewrites the per-request
+    // system parts and the tool map. V1 received `system` / `tools` in the `session.prompt` body;
+    // V2's prompt body has neither, so `SessionContext.system` / `.tools` is the only channel
+    // left - and a hook may be handed a decoded copy that never reaches the request (the host
+    // ignores `event.model.variant`, which is why the reasoning bridge relies on `options`).
+    if (process.env.SHIM_PROBE_MUTATE_CONTEXT === "1") {
+      const registrar = ctx.session?.hook
+      const drop = (process.env.SHIM_PROBE_DROP_TOOLS ?? "shell,subagent,question")
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean)
+      record("context.hook", { hasSessionHook: typeof registrar, drop })
+      if (typeof registrar === "function") {
+        try {
+          await registrar("context", async (event: Any) => {
+            const tools = event?.tools
+            const toolNames = tools && typeof tools === "object" ? Object.keys(tools) : []
+            record("context.event", {
+              sessionID: event?.sessionID ?? null,
+              agent: event?.agent ?? null,
+              hasSystem: Array.isArray(event?.system),
+              systemLen: Array.isArray(event?.system) ? event.system.length : null,
+              toolCount: toolNames.length,
+              toolNames: toolNames.join(","),
+              presentBeforeDrop: drop.filter((name) => toolNames.includes(name)).join(","),
+            })
+            if (Array.isArray(event?.system)) {
+              // A DIFFERENT literal from the one the production bridge replays, so a capture that
+              // enables both can still tell which one put the part on the request.
+              event.system.push({ type: "text", text: "ZZPROBE_HANDROLLED_SYSTEM_MARKER" })
+            }
+            if (tools && typeof tools === "object") {
+              for (const name of drop) delete tools[name]
+            }
+          })
+          record("context.hook.registered", { ok: true })
+        } catch (error) {
+          record("context.hook.registered", { ok: false, error: describe(error) })
+        }
+      }
+    }
+
+    // Optional: register the PRODUCTION per-session request-config bridge exactly as
+    // `register-hook-assembly.ts` does, instead of mutating the event by hand below. That is what
+    // proves the whole chain - the shim records the V1 `system`/`tools` onto the session, the hook
+    // applies them - against a live provider request.
+    if (process.env.SHIM_PROBE_SESSION_PROMPT_CONFIG === "1") {
+      try {
+        const { registerOmoSessionPromptConfigHook } = await import(
+          `${REPO}/packages/omo-opencode/src/v2/register-hooks.ts`
+        )
+        const { getSessionPromptConfig } = await import(
+          `${REPO}/packages/omo-opencode/src/v2/session-prompt-config.ts`
+        )
+        const registrar = (name: string, callback: Any) => ctx.session.hook(name, callback)
+        await registerOmoSessionPromptConfigHook(registrar, getSessionPromptConfig)
+        record("promptconfig.hook.registered", { ok: true })
+      } catch (error) {
+        record("promptconfig.hook.registered", { ok: false, error: describe(error) })
+      }
+    }
+
     const def = {
       description:
         "Live probe: calls the production V2 client shim (session.create parentID, session.summarize) and waits for the host's abort signal.",
@@ -205,6 +267,31 @@ export default {
           } catch (error) {
             record("summarize.result", { resolved: false, error: describe(error) })
           }
+        }
+
+        if (mode === "session-prompt-config") {
+          const { getSessionPromptConfig } = await import(
+            `${REPO}/packages/omo-opencode/src/v2/session-prompt-config.ts`
+          )
+          try {
+            const response = await shim.session.promptAsync?.({
+              path: { id: context.sessionID },
+              body: {
+                system: "ZZPROBE_SYSTEM_MARKER",
+                tools: { bash: false, task: false },
+                parts: [{ type: "text", text: "zzprobe follow-up turn" }],
+              },
+            })
+            record("promptconfig.sent", {
+              sessionID: context.sessionID,
+              ok: true,
+              returnedId: (response as Any)?.id ?? null,
+              recorded: getSessionPromptConfig(context.sessionID) ?? null,
+            })
+          } catch (error) {
+            record("promptconfig.sent", { sessionID: context.sessionID, threw: describe(error) })
+          }
+          return "PROMPTCONFIG_SENT"
         }
 
         if (mode === "wait-abort" || mode === "all") {

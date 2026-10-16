@@ -55,7 +55,7 @@ mkdir -p "$OPENCODE_CONFIG_DIR" "$OQA_PROJ/.opencode/plugins"
 MOCK_PORT="$(oqa_free_port)"
 : >"$MOCK_LOG"
 python3 "$MOCK_PY" --port "$MOCK_PORT" --log "$MOCK_LOG" --reply "TURN_DONE" \
-  --tool-call "$TOOL_ID" --tool-args '{"mode":"all"}' --tool-call-marker "$MARKER" \
+  --tool-call "$TOOL_ID" --tool-args "{\"mode\":\"${SHIM_PROBE_MODE:-all}\"}" --tool-call-marker "$MARKER" \
   --summary-file "$SUMMARY_FIXTURE" \
   --prompt-tokens 24000 --completion-tokens 8 \
   >"$OQA_PROJ/mock.out" 2>&1 &
@@ -98,6 +98,12 @@ PASS="oqa-${RANDOM}${RANDOM}"
 export SHIM_PROBE_REPO="$REPO_ROOT"
 export SHIM_PROBE_OUT="$PROBE_OUT"
 export SHIM_PROBE_TARGET_FILE="$TARGET_FILE"
+# Probes whether a `context` hook can still change the per-request system parts and tool map,
+# which is where V1's prompt-body `system` / `tools` would have to land on V2.
+export SHIM_PROBE_MUTATE_CONTEXT="${SHIM_PROBE_MUTATE_CONTEXT:-1}"
+# Register the production per-session request-config bridge as well, so probe 13 exercises the real
+# shim -> hook -> provider chain instead of the probe's own mutation.
+export SHIM_PROBE_SESSION_PROMPT_CONFIG="${SHIM_PROBE_SESSION_PROMPT_CONFIG:-1}"
 # `exec` matters: without it $! is the subshell, so the kill below would leave
 # the real server orphaned (ppid 1) and holding its port.
 (cd "$OQA_PROJ" && exec env OPENCODE_SERVER_PASSWORD="$PASS" opencode serve --port "$PORT" --hostname 127.0.0.1 \
@@ -212,7 +218,7 @@ done
 printf 'ABORT_RECORDED=%s\n' "$(grep -c '"label":"abort.observed"' "$PROBE_OUT" 2>/dev/null || printf 0)"
 
 # Let the interrupted step's trailing events reach the probe before reporting.
-sleep 3
+sleep "${SHIM_PROBE_SETTLE_SECONDS:-3}"
 
 # Single consolidated report, taken once every stage has settled.
 python3 - "$PROBE_OUT" "$DONOR" <<'PY'
@@ -320,6 +326,88 @@ PY
 printf 'PROBE_OUT=%s\nMOCK_LOG=%s\n' "$PROBE_OUT" "$MOCK_LOG"
 printf 'MOCK_TOOL_CALLS=%s\n' "$(grep -c '"decision": "tool_call"' "$MOCK_LOG" 2>/dev/null || printf 0)"
 printf 'MOCK_TEXT_REPLIES=%s\n' "$(grep -c '"decision": "text"' "$MOCK_LOG" 2>/dev/null || printf 0)"
+
+# Did the `context` hook's rewrite of the request actually reach the provider? The mock is the
+# provider, so its captured bodies are the ground truth.
+python3 - "$PROBE_OUT" "$MOCK_LOG" <<'PY'
+import json, sys
+
+rows = []
+for line in open(sys.argv[1], errors='ignore'):
+    line = line.strip()
+    if line:
+        try:
+            rows.append(json.loads(line))
+        except Exception:
+            pass
+try:
+    bodies = [json.loads(l) for l in open(sys.argv[2], errors='ignore') if l.strip()]
+except OSError:
+    bodies = []
+
+promptconfig_registered = [r for r in rows if r.get('label') == 'promptconfig.hook.registered']
+promptconfig_sent = [r for r in rows if r.get('label') == 'promptconfig.sent']
+print('PROMPTCONFIG_HOOK_REGISTERED=%s' % ('yes' if any(r.get('ok') for r in promptconfig_registered) else 'no'))
+print('PROMPTCONFIG_SENT=%s' % ('yes' if promptconfig_sent else 'no'))
+if promptconfig_sent:
+    recorded = promptconfig_sent[0].get('recorded') or {}
+    print('PROMPTCONFIG_RECORDED_SYSTEM=%s' % (','.join(recorded.get('system') or []) or 'NONE'))
+    print('PROMPTCONFIG_RECORDED_TOOLS=%s' % (','.join(sorted((recorded.get('tools') or {}).keys())) or 'NONE'))
+
+hook_events = [r for r in rows if r.get('label') == 'context.event']
+registered = [r for r in rows if r.get('label') == 'context.hook.registered']
+hook_setup = [r for r in rows if r.get('label') == 'context.hook']
+drop = (hook_setup[0].get('drop') if hook_setup else []) or []
+print('CONTEXT_HOOK_REGISTERED=%s' % ('yes' if any(r.get('ok') for r in registered) else 'no'))
+print('CONTEXT_HOOK_CALLS=%d' % len(hook_events))
+if hook_events:
+    first = hook_events[0]
+    print('CONTEXT_HOOK_SYSTEM=%s' % ('array(%s)' % first.get('systemLen') if first.get('hasSystem') else 'MISSING'))
+    print('CONTEXT_HOOK_TOOLS=%s' % first.get('toolCount'))
+    print('CONTEXT_HOOK_TOOL_NAMES=%s' % (first.get('toolNames') or 'NONE'))
+    print('CONTEXT_HOOK_DROP_PRESENT=%s' % (first.get('presentBeforeDrop') or 'NONE'))
+
+def tool_names(body):
+    names = []
+    for tool in body.get('tools') or []:
+        if isinstance(tool, dict):
+            fn = tool.get('function')
+            name = (fn or {}).get('name') or tool.get('name')
+            if name:
+                names.append(name)
+    return names
+
+parsed_bodies = []
+for b in bodies:
+    try:
+        parsed_bodies.append(json.loads(b.get('raw') or '{}'))
+    except Exception:
+        pass
+
+def has_marker(body, marker):
+    return marker in json.dumps(body.get('raw', ''))
+
+marker_hits = sum(1 for b in bodies if has_marker(b, 'ZZPROBE_SYSTEM_MARKER'))
+handrolled_hits = sum(1 for b in bodies if has_marker(b, 'ZZPROBE_HANDROLLED_SYSTEM_MARKER'))
+print('MOCK_PROVIDER_REQUESTS=%d' % len(bodies))
+for index, body in enumerate(bodies):
+    names = tool_names(json.loads(body.get('raw') or '{}'))
+    print('MOCK_REQUEST_ROW=%d decision=%s marker=%s shell=%s subagent=%s tools=%d' % (
+        index,
+        body.get('decision') or 'unknown',
+        'yes' if has_marker(body, 'ZZPROBE_SYSTEM_MARKER') else 'no',
+        'yes' if 'shell' in names else 'no',
+        'yes' if 'subagent' in names else 'no',
+        len(names),
+    ))
+print('MOCK_REQUESTS_WITH_SYSTEM_MARKER=%d' % marker_hits)
+print('MOCK_REQUESTS_WITH_HANDROLLED_MARKER=%d' % handrolled_hits)
+for name in drop:
+    hits = sum(1 for p in parsed_bodies if name in tool_names(p))
+    print('MOCK_REQUESTS_WITH_%s_TOOL=%d' % (name.upper(), hits))
+if parsed_bodies:
+    print('MOCK_FIRST_REQUEST_TOOLS=%s' % (','.join(sorted(tool_names(parsed_bodies[0]))) or 'NONE'))
+PY
 
 cp "$OQA_PROJ/serve.err" "$SERVE_ERR" 2>/dev/null || true
 

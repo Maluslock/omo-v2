@@ -35,6 +35,10 @@ import {
   type V1ChatMessageOutput,
 } from "./prompt-hook-mapping"
 import {
+  applySessionPromptConfig,
+  type SessionPromptConfig,
+} from "./session-prompt-config"
+import {
   applyV1ChatParams,
   toV1ChatParams,
   type V1ChatParamsInput,
@@ -254,5 +258,42 @@ export async function registerOmoModelRequestHook(
     if (pair === undefined) return
     await handler(pair.input, pair.output)
     applyV1ChatParams(event, pair.output, pair.input)
+  })
+}
+
+export type SessionPromptConfigResolver = (sessionID: string) => SessionPromptConfig | undefined
+
+/**
+ * Apply the per-session `system`/`tools` that the V1 create and prompt bodies carried and the V2
+ * forms cannot (recorded by the client shim, see `session-prompt-config.ts`).
+ *
+ * Registered as its own `context` handler next to the V1 `experimental.chat.system.transform`
+ * bridge: that one carries the *global* transform hooks, while this one replays what a specific
+ * caller asked for when it created or prompted a session - the per-task skill content and tool
+ * restrictions `delegate-task` / `background-agent` hand to their subagents.
+ *
+ * Unlike the V1 bridges, failures here must not break the request: a config that cannot be
+ * expressed (a tool name with no V2 counterpart, an `"ask"` effect) is reported once and skipped.
+ */
+export async function registerOmoSessionPromptConfigHook(
+  registrar: V2SessionHookRegistrar,
+  resolve: SessionPromptConfigResolver,
+): Promise<HookRegistration> {
+  const reported = new Set<string>()
+  return registrar("context", async (event) => {
+    if (!isRecord(event) || typeof event.sessionID !== "string") return
+    const config = resolve(event.sessionID)
+    if (config === undefined) return
+    applySessionPromptConfig(event, config, (reason, name) => {
+      const key = `${reason}:${name}`
+      if (reported.has(key)) return
+      reported.add(key)
+      log(
+        reason === "ask"
+          ? `[v2] session prompt config: "ask" for tool "${name}" cannot be enforced per request and the tool stays advertised`
+          : `[v2] session prompt config: tool "${name}" has no V2 counterpart in this request and cannot be denied`,
+        { sessionID: event.sessionID },
+      )
+    })
   })
 }
