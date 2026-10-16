@@ -39,8 +39,22 @@ oqa_require() {
 }
 
 # Absolute path of the active opencode DB (resolves channel / OPENCODE_DB).
+#
+# `opencode db path` was removed in 2.0.30: there the CLI prints its own top-level
+# help instead, so the bare call returned "DESCRIPTION" and every isolation check
+# that compared counts against it passed vacuously. Ladder: the old subcommand,
+# then `opencode debug paths` (2.0.30's spelling), then the documented location.
 oqa_db_path() {
-  opencode db path 2>/dev/null | head -1
+  local p
+  p="$(opencode db path 2>/dev/null | head -1)"
+  if [ -n "$p" ] && [ -f "$p" ]; then printf '%s\n' "$p"; return 0; fi
+  p="$(opencode debug paths 2>/dev/null | awk '$1 == "db" { print $2; exit }')"
+  if [ -n "$p" ] && [ -f "$p" ]; then printf '%s\n' "$p"; return 0; fi
+  for p in "${XDG_DATA_HOME:-$HOME/.local/share}/opencode/opencode.db" \
+           "$HOME/.local/share/opencode/opencode.db"; do
+    if [ -f "$p" ]; then printf '%s\n' "$p"; return 0; fi
+  done
+  return 1
 }
 
 # Escape a value for safe embedding inside a single-quoted SQL literal.
@@ -147,6 +161,28 @@ oqa_start_server() {
   fi
 }
 
+# Kill processes still scoped to one of our sandboxes, before the sandboxes are
+# deleted. The TUI path starts a managed `opencode serve --service` that
+# daemonizes (ppid 1), so it is not covered by OQA_SERVER_PID; left alive, its
+# exit-time writes re-create the XDG tree we just removed. Matching is by the
+# sandbox path inside the process environment, which is unique per run.
+oqa_kill_sandbox_processes() {
+  local d p id env
+  for d in "${OQA_TMPDIRS[@]:-}"; do
+    [ -n "$d" ] || continue
+    for p in /proc/[0-9]*; do
+      [ -r "$p/environ" ] || continue
+      id="${p#/proc/}"
+      [ "$id" = "$$" ] && continue
+      env="$(tr '\0' '\n' <"$p/environ" 2>/dev/null)" || continue
+      case "$env" in
+        *"$d"*) kill "$id" 2>/dev/null || true ;;
+      esac
+    done
+  done
+  sleep 0.3
+}
+
 # Teardown everything the helpers created. Safe to call multiple times.
 oqa_cleanup() {
   if [ -n "${OQA_SERVER_PID:-}" ]; then
@@ -164,6 +200,12 @@ oqa_cleanup() {
     [ -n "$p" ] && sleep 0.1
     [ -n "$p" ] && kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null || true
   done
+  oqa_kill_sandbox_processes
+  for d in "${OQA_TMPDIRS[@]:-}"; do
+    [ -n "$d" ] && rm -rf "$d" 2>/dev/null || true
+  done
+  # A process that was mid-write when it got killed can leave a directory behind.
+  sleep 0.2
   for d in "${OQA_TMPDIRS[@]:-}"; do
     [ -n "$d" ] && rm -rf "$d" 2>/dev/null || true
   done

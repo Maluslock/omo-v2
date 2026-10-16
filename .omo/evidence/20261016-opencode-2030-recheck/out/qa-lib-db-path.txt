@@ -1,0 +1,34 @@
+# QA library self-check and db-path resolution on opencode 2.0.30
+# Host: opencode v2.0.30
+
+## BEFORE the oqa_db_path fix
+$ opencode db path
+DESCRIPTION
+  OpenCode command line interface
+
+USAGE
+  opencode <subcommand> [flags] [<directory>]
+
+
+$ bash .agents/skills/opencode-qa/scripts/lib/common.sh --self-check
+PASS: dependencies present (opencode sqlite3 curl jq tmux)
+FAIL: oqa_db_path returned 'DESCRIPTION'
+PASS: oqa_sql_escape quotes single quotes
+PASS: isolated XDG sandbox auto-removed on exit (/tmp/oqa-xdg.jLLkmJ)
+PASS: isolated HOME points inside sandbox
+PASS: isolated HOME preserves HOME-based opencode shim
+common.sh self-check had 1 failure(s)
+
+## AFTER the fix (ladder: db path -> debug paths -> documented location)
+$ opencode debug paths | awk '$1=="db"{print $2}'
+/home/user/.local/share/opencode/opencode.db
+
+$ bash .agents/skills/opencode-qa/scripts/lib/common.sh --self-check
+PASS: dependencies present (opencode sqlite3 curl jq tmux)
+PASS: oqa_db_path -> /home/user/.local/share/opencode/opencode.db
+PASS: oqa_sql_escape quotes single quotes
+PASS: oqa_free_port -> 49481
+PASS: isolated XDG sandbox auto-removed on exit (/tmp/oqa-xdg.JBn0R2)
+PASS: isolated HOME points inside sandbox
+PASS: isolated HOME preserves HOME-based opencode shim
+PASS: common.sh self-check
