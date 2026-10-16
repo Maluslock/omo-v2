@@ -115,8 +115,9 @@ use, and two seams plug host-specific behavior into pre-existing extension point
 
 ## 4. Measured host facts the design depends on
 
-Each row was measured on a live 2.0.11 host. The evidence files live under
-`../../.omo/evidence/20260923-v2-alignment/` (force-added to git because `.omo/*` is ignored).
+Each row was measured on a live 2.0.11 host and re-checked on 2.0.30 (2026-10-16). The evidence files
+live under `../../.omo/evidence/20260923-v2-alignment/` and
+`../../.omo/evidence/20261016-opencode-2030-recheck/` (force-added to git because `.omo/*` is ignored).
 
 | Fact | Why it matters | Evidence |
 |---|---|---|
@@ -124,8 +125,11 @@ Each row was measured on a live 2.0.11 host. The evidence files live under
 | The host's own store is `<data dir>/opencode/opencode.db`, table `session_v2` | Session backfill reads it read-only; WAL rows are visible to a `readonly` connection | `p6-b9-session-backfill.md` |
 | V2 emits no `session.idle`, no `session.status`, no `session.compacted` | The turn end is `session.execution.succeeded`; mapping it is what makes every idle-keyed hook fire | `live-v2-event-catalog.md` |
 | `session.compaction.started` / `.ended` exist; a mid-turn turn continues after compaction | omo only restores its own state and must not inject a continuation prompt | `p6-b7-mid-turn-compaction.md` |
-| `context.options` is a typed surface (`maxTokens`, `temperature`, `topP`, `topK`, ... ) and unknown keys are dropped | V1 names must be translated, not passed through | `p6-b10-reasoning-effort-channel.md` |
-| Typed `reasoningEffort` is lowered to the provider's `reasoning_effort`; the snake spelling is dropped | The V1 effort fallback needs no special handling | `p6-b10-reasoning-effort-channel.md` |
+| `context.options` is a typed surface (`maxTokens`, `temperature`, `topP`, `topK`, ... ) and unknown keys are dropped | V1 names must be translated, not passed through | `p6-b10-reasoning-effort-channel.md`; re-measured on 2.0.30 in `20261016-opencode-2030-recheck/README.md` (probe 3) |
+| `temperature` reaches the wire unchanged, `topP` becomes `top_p`, `maxTokens` becomes `max_completion_tokens` | The renamed keys still arrive, so the bridge needs no per-provider adjustment | `out/probe3-gen-options.txt` in the 2.0.30 evidence directory |
+| `topK` is dropped by the openai-compatible package even when set correctly | Do not expect `topK` to have any effect on that provider family | `out/probe3-gen-options.txt` in the 2.0.30 evidence directory |
+| Typed `reasoningEffort` is lowered to the provider's `reasoning_effort`; the snake spelling is dropped | The V1 effort fallback needs no special handling | `p6-b10-reasoning-effort-channel.md`; confirmed on the wire on 2.0.30 (probe 3) |
+| Appending `{type:"text", text}` to `event.system` in the `compaction` hook reaches the summary request | This is the only channel `compaction-hook-mapping.ts` can write V1 context through | `out/probe5-compaction.txt` in the 2.0.30 evidence directory |
 | Writing `event.model.variant` inside `context` is honored by the primary request | The request-time variant lowering works without a mutable message | `p6-b6-chat-params-bridge.md` |
 | `ToolContext` has no `ask`, and `permission.hook("evaluate")` cannot create a request | Permission-gated code must answer the ask itself and fail closed | `p5-a3-permission-assessment.md`, `p6-b3-monitor.md` |
 | `ctx.storage` is a plugin-namespaced KV that survives restarts | The session index persists | `live-v2-storage-events.md` |

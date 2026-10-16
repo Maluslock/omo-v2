@@ -106,11 +106,16 @@ for line in open(out, errors='replace'):
         v = ev.get(key)
         if isinstance(v, str) and v.strip():
             final = v.strip()[:200]
-    d = ev.get('data') if isinstance(ev.get('data'), dict) else ev
-    for key in ('text', 'content'):
-        v = d.get(key) if isinstance(d, dict) else None
-        if isinstance(v, str) and v.strip():
-            final = v.strip()[:200]
+    # --format json nests the assistant text under `part`.
+    sources = [ev]
+    for key in ('part', 'data'):
+        if isinstance(ev.get(key), dict):
+            sources.append(ev[key])
+    for src in sources:
+        for key in ('text', 'content'):
+            v = src.get(key)
+            if isinstance(v, str) and v.strip():
+                final = v.strip()[:200]
 print('TOOL_CALL=%s' % ('omo_glob:present' if tool else 'omo_glob:missing'))
 if tool:
     print('TOOL_EVIDENCE=%s' % tool.replace('\n', ' '))

@@ -159,10 +159,16 @@ Re-run these probes when the host version changes:
 | a turn that overflows the context limit | compaction events and whether the turn resumes |
 | `tui.json`/`cli.json` plus a tmux TUI | which client config the host reads and whether the CLI plugin loads |
 
-Last re-run: `opencode` **2.0.30** (2026-10-16). Probes 1, 2 and 6 pass unchanged; probe 4 is covered by
-the events probe 2 observes; probes 3 and 5 were checked statically only. The write-up, the observed API
-changes (`/api` route prefix, the `{"text"}` prompt body, the deferred `session.created` delivery) and the
-residual risk list are in `../../.omo/evidence/20261016-opencode-2030-recheck/README.md`.
+Last re-run: `opencode` **2.0.30** (2026-10-16). Probes 1, 2, 3, 5 and 6 pass unchanged. Probe 3 saw
+`temperature` forwarded as-is and `topP`/`maxTokens`/`reasoningEffort` renamed to
+`top_p`/`max_completion_tokens`/`reasoning_effort` on the wire, with `topK` and unknown keys dropped.
+Probe 5 saw overflow trigger a summary compaction, all three `session.compaction.*` events fire, the
+turn resume, and the compaction hook's `event.system` addition reach the summary request - the channel
+`compaction-hook-mapping.ts` writes to. Probe 4 is covered by the events probe 2 observes; a long-lived
+subagent was not driven to completion. The write-up, the observed API changes (`/api` route prefix, the
+`{"text"}` prompt body, the deferred `session.created` delivery), the in-place host upgrade plus the
+managed-service restart and its three database migrations, and the residual risk list are in
+`../../.omo/evidence/20261016-opencode-2030-recheck/README.md`.
 
 ## 9. Evidence index
 
@@ -187,6 +193,8 @@ All under `../../.omo/evidence/20260923-v2-alignment/` (force-added because `.om
 | `p6-real-config-smoke.md`, `p6-c1-local-build.md` | Real-config smoke and the supported build recipe |
 
 The 2.0.30 re-verification lives in its own directory,
-`../../.omo/evidence/20261016-opencode-2030-recheck/` (also force-added): `README.md` plus the six probe
-scripts, among them `recheck-host.sh`, `event-catalog-2030.sh`, `serve-event-catalog-2030.sh`,
-`raw-event-stream-2030.sh`, `session-created-ordering-2030.sh` and `tui-slot-2030.sh`.
+`../../.omo/evidence/20261016-opencode-2030-recheck/` (also force-added): `README.md`, the eight probe
+scripts (`recheck-host.sh`, `event-catalog-2030.sh`, `serve-event-catalog-2030.sh`,
+`raw-event-stream-2030.sh`, `session-created-ordering-2030.sh`, `gen-options-2030.sh`,
+`compaction-2030.sh`, `tui-slot-2030.sh`), their `out/` captures, and the fake provider
+`mock-provider.py` the last two drive.

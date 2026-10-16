@@ -1,0 +1,18 @@
+MOCK_PORT=43801
+HOST_VERSION=opencode v2.0.30
+RUN_RC=0
+BODY_COUNT=2
+PROVIDER_REQUESTS=2
+FIELD_temperature=0.37
+FIELD_topP=ABSENT
+FIELD_topK=ABSENT
+FIELD_maxTokens=ABSENT
+FIELD_maxOutputTokens=ABSENT
+FIELD_reasoningEffort=ABSENT
+FIELD_omoProbeSentinel=ABSENT
+OTHER_BODY_KEYS=["max_completion_tokens", "reasoning_effort", "store", "stream_options", "tools", "top_p"]
+MODEL_SEEN=mock-1 STREAM_SEEN=True
+FINAL_TEXT=MOCK_OK
+RUN_ERR_TAIL=
+ISO=ISO_OK
+SANDBOX=/tmp/oqa-xdg.CyigEo/proj
