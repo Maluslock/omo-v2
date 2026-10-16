@@ -1,0 +1,27 @@
+{"label": "setup", "hasSessionGet": "function", "hasSessionCreate": "function", "hasSessionCompact": "function", "hasToolTransform": "function", "hasEventSubscribe": "function", "at": 1792139910466}
+{"label": "shim", "hasCreate": "function", "hasSummarize": "function", "hasAbortMethod": "function", "at": 1792139910716}
+{"label": "registered", "name": "zz_shim_probe", "namespace": "zzprobe", "at": 1792139910719}
+{"label": "event", "type": "session.execution.started", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "at": 1792139910859}
+{"label": "v1event", "type": "session.created", "id": "ses_ebc23254affe8A5G0ryhk3bUmc", "title": null, "at": 1792139910943}
+{"label": "v1event", "type": "message.updated", "id": "msg_143dcdede001HNIE4zBQELZGvK", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "role": "assistant", "finish": null, "providerID": "mock", "modelID": "mock-1", "agent": "build", "hasTokens": false, "timeCreated": 1792139910901, "timeCompleted": null, "at": 1792139910943}
+{"label": "v1event", "type": "message.updated", "id": "msg_143dcdede001HNIE4zBQELZGvK", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "role": "assistant", "finish": "stop", "providerID": "mock", "modelID": "mock-1", "agent": "build", "hasTokens": true, "timeCreated": 1792139910901, "timeCompleted": 1792139910934, "at": 1792139910944}
+{"label": "event", "type": "session.execution.succeeded", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "at": 1792139910944}
+{"label": "event", "type": "session.created", "sessionID": "ses_ebc23195dffeBmzDURqhoVDxbq", "at": 1792139912877}
+{"label": "v1event", "type": "session.created", "id": "ses_ebc23195dffeBmzDURqhoVDxbq", "title": "shim probe driver", "at": 1792139912877}
+{"label": "event", "type": "session.execution.started", "sessionID": "ses_ebc23195dffeBmzDURqhoVDxbq", "at": 1792139912984}
+{"label": "v1event", "type": "message.updated", "id": "msg_143dce708001oO1sq6rGTCgHAP", "sessionID": "ses_ebc23195dffeBmzDURqhoVDxbq", "role": "assistant", "finish": null, "providerID": "mock", "modelID": "mock-1", "agent": "build", "hasTokens": false, "timeCreated": 1792139912981, "timeCompleted": null, "at": 1792139913000}
+{"label": "tool.start", "mode": "all", "sessionID": "ses_ebc23195dffeBmzDURqhoVDxbq", "abortIsAbortSignal": true, "at": 1792139913004}
+{"label": "create.result", "error": null, "requestedParentID": "ses_ebc23195dffeBmzDURqhoVDxbq", "id": "ses_ebc2318d3ffeA5P2CJx6XRdwJJ", "returnedParentID": "ses_ebc23195dffeBmzDURqhoVDxbq", "at": 1792139913008}
+{"label": "summarize.begin", "target": "ses_ebc23254affe8A5G0ryhk3bUmc", "at": 1792139913008}
+{"label": "event", "type": "session.created", "sessionID": "ses_ebc2318d3ffeA5P2CJx6XRdwJJ", "at": 1792139913012}
+{"label": "v1event", "type": "session.created", "id": "ses_ebc2318d3ffeA5P2CJx6XRdwJJ", "title": "zz shim probe child", "at": 1792139913012}
+{"label": "summarize.result", "resolved": true, "error": null, "at": 1792139913012}
+{"label": "abort.wait", "aborted": false, "at": 1792139913012}
+{"label": "event", "type": "session.execution.started", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "at": 1792139913046}
+{"label": "event", "type": "session.compaction.started", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "at": 1792139913047}
+{"label": "event", "type": "session.compaction.delta", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "at": 1792139913059}
+{"label": "event", "type": "session.compaction.delta", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "at": 1792139913059}
+{"label": "event", "type": "session.compaction.ended", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "at": 1792139913059}
+{"label": "event", "type": "session.execution.succeeded", "sessionID": "ses_ebc23254affe8A5G0ryhk3bUmc", "at": 1792139913059}
+{"label": "abort.observed", "outcome": "aborted", "aborted": true, "at": 1792139915208}
+{"label": "v1event.stream", "settled": true, "at": 1792139918380}

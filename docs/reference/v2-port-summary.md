@@ -41,7 +41,7 @@ host generations and renders into the 2.x `sidebar.content` slot.
 | `experimental.chat.system.transform` | `session.hook("context").system` | ported |
 | `experimental.session.compacting` | `session.hook("compaction")` | ported |
 | `compaction.autocontinue` | `session.compaction.ended` state restore | ported; continuation is host-native |
-| `event` | `ctx.event.subscribe` + a corrected event vocabulary + `message.updated` synthesized from the V2 step events | ported |
+| `event` | `ctx.event.subscribe` + a corrected event vocabulary + `message.updated` synthesized from the V2 step events + `session.created` announced for sessions that predate the subscription | ported |
 | `tool.execute.before/after` | `ctx.tool.hook(...)` | ported |
 | `permission` | fail-closed self-answer (`ask-resolver.ts`) | ported as far as the host allows |
 | Session enumeration | omo's own index in `ctx.storage` + a read-only host-store backfill | ported |
@@ -79,6 +79,11 @@ V2 port bugs:
 - Team members were aborted mid-turn because `session.status` was an empty stub (`5b3e790`).
 - Every idle-keyed hook was dead because `session.idle` has no V2 counterpart (`5b3e790`).
 - `client.tui.showToast` was missing, so every command route returned HTTP 500 (`1492a33`).
+- `session.created` never reached a hook for the session that loaded the plugin, because project plugins
+  load lazily on their first turn - so on `opencode run`, and for the first session of a long-lived
+  server, the per-session hooks keyed on it (fallback state, session notifications, ast-grep
+  provisioning, the codegraph bootstrap) never ran at all. The subscription now announces an unannounced
+  session on its first observed activity, preserving the V1 invariant that `session.created` comes first.
 - Every hook keyed on `message.updated` - preemptive compaction, runtime fallback, the todo enforcer,
   session notifications, the Anthropic recovery hook, about twenty call sites in all - was **dormant on
   V2**, because `message.updated` exists only in the schema's V1 namespace and nothing synthesized it.
@@ -198,7 +203,10 @@ been inferred from probe 2, and it now has its own script.
   on 2.0.30. No model was asked to *choose* to delegate; the probe drives the child session directly.
 - One delivery boundary did move: `session.created` only reaches plugins after the plugin's first prompt,
   so every session created before that window is missed (`WINDOW=pre_first_prompt_window`). The raw wire
-  still carries the event, so this is subscription ordering rather than a dropped name.
+  still carries the event, so this is subscription ordering rather than a dropped name. **Compensated**:
+  because project plugins load lazily, that window covers the session that triggered the load - which is
+  *every* session of an `opencode run` process and the first one of a server - so the subscription now
+  announces a session the first time it sees activity for one whose creation it did not observe (see §4).
 
 The write-up, the observed API changes (`/api` route prefix, the `{"text"}` prompt body), the in-place
 host upgrade plus the managed-service restart and its three database migrations, and the residual risk

@@ -275,8 +275,23 @@ abort = first('abort.observed')
 print('ABORT_OBSERVED=%s' % ('yes' if abort else 'no'))
 print('ABORT_OUTCOME=%s' % (abort.get('outcome') or 'NONE'))
 print('ABORT_ABORTED=%s' % (abort.get('aborted') if abort else 'NONE'))
-v1 = [row for row in rows if row.get('label') == 'v1event']
+v1 = [row for row in rows if row.get('label') == 'v1event' and row.get('type') == 'message.updated']
 finished = [row for row in v1 if row.get('finish')]
+v1_created = [row for row in rows if row.get('label') == 'v1event' and row.get('type') == 'session.created']
+raw_created = [row for row in rows if row.get('label') == 'event' and row.get('type') == 'session.created']
+
+
+def created_ids(entries, key):
+    out = set()
+    for row in entries:
+        value = row.get(key)
+        if isinstance(value, str) and value:
+            out.add(value)
+    return out
+
+
+v1_created_ids = created_ids(v1_created, 'id')
+raw_created_ids = created_ids(raw_created, 'sessionID')
 print('V1_MESSAGE_UPDATED=%d' % len(v1))
 print('V1_MESSAGE_UPDATED_FINISHED=%d' % len(finished))
 print('V1_MESSAGE_UPDATED_ROLE=%s' % (','.join(sorted({str(r.get('role')) for r in v1})) or 'NONE'))
@@ -284,6 +299,9 @@ print('V1_MESSAGE_UPDATED_PROVIDER=%s' % (','.join(sorted({str(r.get('providerID
 print('V1_MESSAGE_UPDATED_MODEL=%s' % (','.join(sorted({str(r.get('modelID')) for r in finished if r.get('modelID')})) or 'NONE'))
 print('V1_MESSAGE_UPDATED_TOKENS=%s' % ('yes' if any(r.get('hasTokens') for r in finished) else 'no'))
 print('V1_MESSAGE_UPDATED_TIME=%s' % ('yes' if any(r.get('timeCreated') and r.get('timeCompleted') for r in finished) else 'no'))
+print('V1_SESSION_CREATED=%s' % (','.join(sorted(v1_created_ids)) or 'NONE'))
+print('RAW_SESSION_CREATED=%s' % (','.join(sorted(raw_created_ids)) or 'NONE'))
+print('V1_CREATED_WITHOUT_RAW=%s' % (','.join(sorted(v1_created_ids - raw_created_ids)) or 'NONE'))
 if not setup:
     print('ERROR=probe_setup_missing')
 elif not registered:

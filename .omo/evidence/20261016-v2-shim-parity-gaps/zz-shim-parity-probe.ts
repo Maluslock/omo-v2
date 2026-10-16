@@ -87,7 +87,10 @@ export default {
             type.startsWith("session.compaction") ||
             type === "session.execution.started" ||
             type === "session.execution.succeeded" ||
-            type === "session.execution.failed"
+            type === "session.execution.failed" ||
+            // Recorded raw as well, so a `session.created` that only reaches the V1 pipeline can be
+            // told apart from one the host actually put on the wire.
+            type === "session.created"
           ) {
             record("event", { type, sessionID: event?.data?.sessionID ?? null })
           }
@@ -108,8 +111,13 @@ export default {
     const subscription = startV2EventSubscription({
       subscribe: (options: Any) => ctx.event.subscribe(options ?? {}),
       dispatch: (input: Any) => {
-        if (input?.event?.type !== "message.updated") return
+        const type = input?.event?.type
+        if (type !== "message.updated" && type !== "session.created") return
         const info = (input?.event?.properties?.info ?? {}) as Record<string, unknown>
+        if (type === "session.created") {
+          record("v1event", { type, id: info.id ?? null, title: info.title ?? null })
+          return
+        }
         const time = (info.time ?? {}) as Record<string, unknown>
         record("v1event", {
           type: "message.updated",

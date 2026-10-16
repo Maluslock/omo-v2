@@ -15,6 +15,15 @@ import { createV1EventMapper, type V1EventInput } from "./hook-mapping"
  * carry the provider/model/agent that only that step's `session.step.started` announced, so the two
  * events must be correlated across iterations.
  *
+ * `session.created` gets the same treatment for a different reason. V1 delivered it when the session
+ * was created, so every hook keyed on it (per-session fallback state, session notifications, ast-grep
+ * provisioning, the codegraph bootstrap) saw it. V2 only delivers it to a plugin that is already
+ * subscribed - and project plugins load lazily, on their first turn. The session that triggers that
+ * load is therefore created before anything is listening, which means *every* session of an
+ * `opencode run` process, and the first one of a long-lived server, never produces the event. A
+ * session is announced the first time the stream shows activity for one whose creation was not seen,
+ * which keeps the V1 invariant that `session.created` precedes everything else for a session.
+ *
  * `dispose()` aborts the stream and resolves once the loop unwinds. A non-cooperative iterable
  * cannot hold teardown open forever: the wait is bounded and a timeout is logged.
  */
@@ -42,26 +51,55 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** Session id of a raw V2 envelope, for the `session.created` announcement below. */
+function sessionIDOfEnvelope(event: unknown): string | undefined {
+  if (typeof event !== "object" || event === null) return undefined
+  const data = (event as { data?: unknown }).data
+  if (typeof data !== "object" || data === null) return undefined
+  const value = (data as { sessionID?: unknown }).sessionID
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
 export function startV2EventSubscription(options: EventSubscriptionOptions): EventSubscription {
   const controller = new AbortController()
   const disposeTimeoutMs = options.disposeTimeoutMs ?? DEFAULT_DISPOSE_TIMEOUT_MS
   const mapper = createV1EventMapper()
+  /** Sessions this stream has accounted for, whether by a real or a synthesized `session.created`. */
+  const announced = new Set<string>()
   let disposed = false
+
+  /**
+   * The `session.created` a V1 host would already have delivered, or nothing. Recording happens for a
+   * real creation too: that is what stops a later activity event from announcing the session twice.
+   */
+  const takeAnnouncement = (event: unknown, v1Type: string): V1EventInput | undefined => {
+    const sessionID = sessionIDOfEnvelope(event)
+    if (sessionID === undefined || announced.has(sessionID)) return undefined
+    announced.add(sessionID)
+    if (v1Type === "session.created") return undefined
+    return { event: { type: "session.created", properties: { info: { id: sessionID } } } }
+  }
+
+  const deliver = async (input: V1EventInput): Promise<void> => {
+    try {
+      await options.dispatch(input)
+    } catch (error) {
+      if (options.onDispatchError !== undefined) {
+        options.onDispatchError(error, input)
+      } else {
+        log("[v2] event dispatch failed", { type: input.event.type, error: describeError(error) })
+      }
+    }
+  }
 
   const consume = async (): Promise<void> => {
     try {
       for await (const event of options.subscribe({ signal: controller.signal })) {
         const input = mapper.toV1Event(event)
         if (input === undefined) continue
-        try {
-          await options.dispatch(input)
-        } catch (error) {
-          if (options.onDispatchError !== undefined) {
-            options.onDispatchError(error, input)
-          } else {
-            log("[v2] event dispatch failed", { type: input.event.type, error: describeError(error) })
-          }
-        }
+        const announcement = takeAnnouncement(event, input.event.type)
+        if (announcement !== undefined) await deliver(announcement)
+        await deliver(input)
       }
     } catch (error) {
       // An abort is the expected teardown path, not an error.

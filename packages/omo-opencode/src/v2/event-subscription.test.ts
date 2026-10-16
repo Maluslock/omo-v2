@@ -5,6 +5,7 @@ import type { V1EventInput } from "./hook-mapping"
 
 const IDLE = { type: "session.idle", data: { sessionID: "ses_1" } }
 const UNMAPPED = { type: "server.connected", data: {} }
+const IDLE_TWO = { type: "session.idle", data: { sessionID: "ses_2" } }
 const CREATED = {
   type: "session.created",
   data: { sessionID: "ses_2", title: "t" },
@@ -40,8 +41,98 @@ describe("startV2EventSubscription", () => {
 
     await sleep(10)
     expect(receivedSignal).toBeInstanceOf(AbortSignal)
-    expect(dispatched.map((input) => input.event.type)).toEqual(["session.idle", "session.created"])
-    expect(dispatched[1]?.event.properties).toEqual({ info: { id: "ses_2", title: "t" } })
+    // `ses_1` was never announced, so its first activity is preceded by the synthesized creation;
+    // the unmapped event announces nothing, and the real `session.created` for `ses_2` is not
+    // duplicated.
+    expect(dispatched.map((input) => input.event.type)).toEqual([
+      "session.created",
+      "session.idle",
+      "session.created",
+    ])
+    expect(dispatched[0]?.event.properties).toEqual({ info: { id: "ses_1" } })
+    expect(dispatched[2]?.event.properties).toEqual({ info: { id: "ses_2", title: "t" } })
+
+    await subscription.dispose()
+  })
+
+  it("announces a session the host created before this subscription existed", async () => {
+    const dispatched: V1EventInput[] = []
+
+    const subscription = startV2EventSubscription({
+      subscribe: (options) =>
+        cooperative(
+          [
+            {
+              type: "session.step.started",
+              created: 1_000,
+              data: {
+                sessionID: "ses_late",
+                assistantMessageID: "msg_1",
+                agent: "sisyphus",
+                model: { id: "deepseek-v4-pro", providerID: "deepseek" },
+                started: 900,
+              },
+            },
+            { type: "session.idle", data: { sessionID: "ses_late" } },
+          ],
+          options?.signal as AbortSignal,
+        ),
+      dispatch: (input) => {
+        dispatched.push(input)
+      },
+    })
+
+    await sleep(10)
+    expect(dispatched.map((input) => input.event.type)).toEqual([
+      "session.created",
+      "message.updated",
+      "session.idle",
+    ])
+    expect(dispatched[0]?.event.properties).toEqual({ info: { id: "ses_late" } })
+    expect(dispatched[1]?.event.properties).toMatchObject({ info: { sessionID: "ses_late" } })
+
+    await subscription.dispose()
+  })
+
+  it("announces each session once, even when its real creation is on the wire", async () => {
+    const dispatched: V1EventInput[] = []
+
+    const subscription = startV2EventSubscription({
+      subscribe: (options) =>
+        cooperative(
+          [
+            { type: "session.created", data: { sessionID: "ses_a" } },
+            {
+              type: "session.step.started",
+              created: 1_000,
+              data: { sessionID: "ses_a", assistantMessageID: "msg_1" },
+            },
+            {
+              type: "session.step.ended",
+              created: 2_000,
+              data: { sessionID: "ses_a", assistantMessageID: "msg_1", finish: "stop" },
+            },
+            { type: "session.idle", data: { sessionID: "ses_b" } },
+          ],
+          options?.signal as AbortSignal,
+        ),
+      dispatch: (input) => {
+        dispatched.push(input)
+      },
+    })
+
+    await sleep(10)
+    expect(dispatched.map((input) => input.event.type)).toEqual([
+      "session.created",
+      "message.updated",
+      "message.updated",
+      "session.created",
+      "session.idle",
+    ])
+    expect(dispatched.filter((input) => input.event.type === "session.created")).toEqual([
+      { event: { type: "session.created", properties: { info: { id: "ses_a" } } } },
+      { event: { type: "session.created", properties: { info: { id: "ses_b" } } } },
+    ])
 
     await subscription.dispose()
   })
@@ -85,15 +176,17 @@ describe("startV2EventSubscription", () => {
 
     await sleep(10)
     expect(dispatched.map((input) => input.event.type)).toEqual([
+      "session.created",
       "message.updated",
       "session.idle",
       "message.updated",
     ])
-    const startedInfo = dispatched[0]?.event.properties.info as Record<string, unknown>
+    const messages = dispatched.filter((input) => input.event.type === "message.updated")
+    const startedInfo = messages[0]?.event.properties.info as Record<string, unknown>
     expect(startedInfo).toMatchObject({ id: "msg_1", role: "assistant", providerID: "deepseek" })
     expect(startedInfo.finish).toBeUndefined()
     // The identity the start event announced survives the intervening idle event.
-    const endedInfo = dispatched[2]?.event.properties.info as Record<string, unknown>
+    const endedInfo = messages[1]?.event.properties.info as Record<string, unknown>
     expect(endedInfo).toMatchObject({
       id: "msg_1",
       role: "assistant",
@@ -113,10 +206,11 @@ describe("startV2EventSubscription", () => {
     let calls = 0
 
     const subscription = startV2EventSubscription({
-      subscribe: (options) => cooperative([IDLE, CREATED], options?.signal as AbortSignal),
+      subscribe: (options) =>
+        cooperative([CREATED, IDLE_TWO, IDLE_TWO], options?.signal as AbortSignal),
       dispatch: (input) => {
         calls += 1
-        if (calls === 1) throw new Error("dispatch boom")
+        if (calls === 2) throw new Error("dispatch boom")
         dispatched.push(input.event.type)
       },
       onDispatchError: (error, input) => {
@@ -125,10 +219,10 @@ describe("startV2EventSubscription", () => {
     })
 
     await sleep(10)
-    // The first event threw but the loop continued to the second.
+    // The second event threw but the loop continued to the third.
     expect(failures).toHaveLength(1)
     expect(failures[0]?.type).toBe("session.idle")
-    expect(dispatched).toEqual(["session.created"])
+    expect(dispatched).toEqual(["session.created", "session.idle"])
 
     await subscription.dispose()
   })
@@ -168,7 +262,7 @@ describe("startV2EventSubscription", () => {
     })
 
     await sleep(10)
-    expect(dispatched).toEqual(["session.idle"])
+    expect(dispatched).toEqual(["session.created", "session.idle"])
 
     await subscription.dispose()
     expect(aborted).toBe(true)

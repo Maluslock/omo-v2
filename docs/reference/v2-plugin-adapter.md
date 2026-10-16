@@ -132,6 +132,7 @@ live under `../../.omo/evidence/20260923-v2-alignment/` and
 | `ctx.session` is a `Pick` without `list`, and `ctx.rpc` has no callable host proxy | Server plugins cannot enumerate sessions; the index exists because of this | `p6-b9-session-backfill.md`, `research/REPORT.md` |
 | The host's own store is `<data dir>/opencode/opencode.db`, table `session_v2` | Session backfill reads it read-only; WAL rows are visible to a `readonly` connection | `p6-b9-session-backfill.md` |
 | V2 emits no `session.idle`, no `session.status`, no `session.compacted` | The turn end is `session.execution.succeeded`; mapping it is what makes every idle-keyed hook fire | `live-v2-event-catalog.md` |
+| `session.created` reaches plugins only after the subscription starts, and project plugins load lazily on their first turn | The session that loaded the plugin never sees its own creation, so every `opencode run` session and the first session of a server miss the V1 hook keyed on it; the subscription announces it from the session's first observed activity | `out/probe9-session-created.txt` and `out/probe9-created-events.txt` in `20261016-v2-shim-parity-gaps/` |
 | `session.compaction.started` / `.ended` exist; a mid-turn turn continues after compaction | omo only restores its own state and must not inject a continuation prompt | `p6-b7-mid-turn-compaction.md` |
 | `context.options` is a typed surface (`maxTokens`, `temperature`, `topP`, `topK`, ... ) and unknown keys are dropped | V1 names must be translated, not passed through | `p6-b10-reasoning-effort-channel.md`; re-measured on 2.0.30 in `20261016-opencode-2030-recheck/README.md` (probe 3) |
 | `temperature` reaches the wire unchanged, `topP` becomes `top_p`, `maxTokens` becomes `max_completion_tokens` | The renamed keys still arrive, so the bridge needs no per-provider adjustment | `out/probe3-gen-options.txt` in the 2.0.30 evidence directory |
@@ -181,6 +182,12 @@ tokens, cost) and emits the assistant message on both. `event-subscription.ts` o
 stream — a stateless `toV1Event` cannot carry `started`'s identity into `ended`. Keep the stateless
 export for single events, and bound the mapper's pending map (`maxPendingSteps`) so a step that never
 ends cannot leak.
+
+A V1 event can also be **missing because the host delivered it before anyone was listening**. That is
+the `session.created` case: keep a set of the sessions the stream has accounted for, mark a session on
+its real creation, and announce a synthetic one on that session's first other event. Deliver the
+announcement first so V1's "created precedes everything about that session" invariant still holds, and
+never announce a session twice.
 
 ## 6. What will catch you (repo gates)
 

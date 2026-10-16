@@ -1,4 +1,4 @@
-# Live evidence: the three V2 client-shim parity fixes + `message.updated` synthesis (opencode 2.0.30)
+# Live evidence: the V2 parity fixes: client shim, `message.updated`, `session.created` (opencode 2.0.30)
 
 Captured 2026-10-16 against **opencode v2.0.30** (`opencode v2.0.30`), plugin API
 `@opencode-ai/plugin` 1.15.13, bun 1.3.14 — the same host the port was re-verified on
@@ -19,9 +19,12 @@ interrupt.
 | 2 | `session.create` forwards `parentID` | **works** | `CREATE_REQUESTED_PARENTID` = `CREATE_RETURNED_PARENTID` = driver session, and an independent host `GET /api/session/{id}` reports the same parent: `CHILD_PARENT_MATCH=yes` |
 | 3 | tools receive the host's own `AbortSignal` | **works** | `ABORT_OBSERVED=yes`, `ABORT_OUTCOME=aborted`, `ABORT_ABORTED=True` ~2s after `POST /api/session/{sessionID}/interrupt` |
 | 4 | `message.updated` rebuilt from the V2 step events | **works** | `V1_MESSAGE_UPDATED=3`, `V1_MESSAGE_UPDATED_FINISHED=1`, `ROLE=assistant`, `PROVIDER=mock`, `MODEL=mock-1`, `TOKENS=yes`, `TIME=yes` — see `out/probe8-v1events.txt` |
+| 5 | `session.created` announced for a session that predates the subscription | **works** | `V1_SESSION_CREATED` lists all three sessions but `RAW_SESSION_CREATED` only the two created after the plugin loaded: `V1_CREATED_WITHOUT_RAW=ses_ebc23254affe8A5G0ryhk3bUmc` - the donor session, announced in the same millisecond as its first `message.updated`, while the driver and child kept their real, titled events — see `out/probe9-created-events.txt` |
 
 Verdicts 1–3 come from the same run (`out/probe7-shim-parity.txt`); verdict 4 is the next run of the
-same runner (`out/probe8-shim-parity-mapper.txt`), after the probe gained the V1 pipeline.
+same runner (`out/probe8-shim-parity-mapper.txt`), after the probe gained the V1 pipeline; verdict 5 is
+the run after that (`out/probe9-session-created.txt`), which also records the raw stream so a
+synthesized creation can be told from a delivered one.
 
 `ISO=ISO_OK` (`297` → `297` rows in the real `~/.local/share/opencode/opencode.db`): every session
 this run created lives in the throwaway XDG root.
@@ -46,6 +49,9 @@ this document was copied here:
 | `out/probe8-shim-parity-mapper.txt` | the same verdicts plus the `V1_MESSAGE_UPDATED*` block (verdict 4) |
 | `out/probe8-v1events.txt` | the three synthesized `message.updated` events, verbatim |
 | `out/probe8-probe.jsonl` / `out/probe8-probe-records.txt` | the full NDJSON of that run, and the records alone |
+| `out/probe9-session-created.txt` | the verdicts again, now with `V1_SESSION_CREATED` / `RAW_SESSION_CREATED` / `V1_CREATED_WITHOUT_RAW` |
+| `out/probe9-created-events.txt` | every `session.created`, raw and V1, in order |
+| `out/probe9-probe.jsonl` / `out/probe9-probe-records.txt` | the full NDJSON of that run, and the records alone |
 
 ## How each verdict is obtained
 
@@ -67,6 +73,13 @@ Then the runner, externally: reads the child session back from the host (fix 2, 
 discovers the interrupt route from `/openapi.json` at runtime — never hard-coded, per the 2026-10-16
 recheck — and interrupts the driver session (fix 3). The tool's `await context.abort` can only
 resolve if the signal the host passed to the tool is the one the interrupt fires.
+
+**Verdict 5** makes the raw subscription record `session.created` too, so the two streams can be
+compared. The donor session is prompted before the plugin exists (project plugins load lazily, on their
+first turn), so its creation is on no subscriber's stream; the V1 pipeline still announced it, in the
+same millisecond as its first `message.updated` (`title: null` - the payload that would have carried the
+title is gone). The driver and child sessions were created while the plugin was live, and each kept its
+single real event, title included: nothing was announced twice.
 
 **Verdict 4** reuses the same runner and sessions, but the probe also starts the production V2 → V1
 pipeline (`startV2EventSubscription` from `packages/omo-opencode/src/v2/event-subscription.ts`,
@@ -105,6 +118,9 @@ its `ended` half never did, because the run interrupts it.
   the V1 pipeline with the fields the hooks read; what each hook then does with it is separate (and
   partly covered by the hook suites). The recorder deliberately stands in for omo's assembled
   handler, so this capture cannot show, say, preemptive compaction firing end to end.
+- **Not** a full reconstruction of the missed creation. The announcement carries the session id and no
+  title or `parentID`, because the event that would have carried them was never delivered; a hook that
+  needs the title has to read the session.
 - **Not** a `message.updated`-for-every-part claim. Only assistant steps are synthesized (the
   `session.step.*` pair); V1's `message.part.updated` remains unmapped and its consumers
   (`packages/omo-opencode/src/hooks/runtime-fallback/first-prompt-watchdog.ts`,
