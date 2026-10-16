@@ -1,7 +1,7 @@
 # omo on OpenCode V2 - alignment summary
 
-**Generated:** 2026-09-24 | **Host:** `opencode` 2.0.11 | **Range:** `213b501` (V2 plugin skeleton) to
-`9f450e2`, 81 commits
+**Generated:** 2026-09-24 | **Host:** `opencode` 2.0.11, re-verified on 2.0.30 (2026-10-16) | **Range:**
+`213b501` (V2 plugin skeleton) to `9f450e2`, 81 commits
 
 This is the outcome summary of porting the OpenCode Ultimate edition of oh-my-openagent onto the
 OpenCode 2.x plugin API. The working plan and the per-capability mapping live in
@@ -159,6 +159,11 @@ Re-run these probes when the host version changes:
 | a turn that overflows the context limit | compaction events and whether the turn resumes |
 | `tui.json`/`cli.json` plus a tmux TUI | which client config the host reads and whether the CLI plugin loads |
 
+Last re-run: `opencode` **2.0.30** (2026-10-16). Probes 1, 2 and 6 pass unchanged; probe 4 is covered by
+the events probe 2 observes; probes 3 and 5 were checked statically only. The write-up, the observed API
+changes (`/api` route prefix, the `{"text"}` prompt body, the deferred `session.created` delivery) and the
+residual risk list are in `../../.omo/evidence/20261016-opencode-2030-recheck/README.md`.
+
 ## 9. Evidence index
 
 All under `../../.omo/evidence/20260923-v2-alignment/` (force-added because `.omo/*` is ignored).
@@ -180,3 +185,8 @@ All under `../../.omo/evidence/20260923-v2-alignment/` (force-added because `.om
 | `p6-b11-tui-plugin-v1-shape.md` | The TUI module shape failure |
 | `p6-b12-tui-plugin-port.md` | The TUI sidebar port: dual-generation export, `sidebar.content`, and the client-config target |
 | `p6-real-config-smoke.md`, `p6-c1-local-build.md` | Real-config smoke and the supported build recipe |
+
+The 2.0.30 re-verification lives in its own directory,
+`../../.omo/evidence/20261016-opencode-2030-recheck/` (also force-added): `README.md` plus the six probe
+scripts, among them `recheck-host.sh`, `event-catalog-2030.sh`, `serve-event-catalog-2030.sh`,
+`raw-event-stream-2030.sh`, `session-created-ordering-2030.sh` and `tui-slot-2030.sh`.

@@ -1,6 +1,7 @@
 # OpenCode V2 plugin adapter - development guide
 
-**Generated:** 2026-09-24 | **Host version referenced:** `opencode` 2.0.11
+**Generated:** 2026-09-24 | **Host version referenced:** `opencode` 2.0.11, re-verified on 2.0.30
+(2026-10-16; the adapter needs no change - see `../../.omo/evidence/20261016-opencode-2030-recheck/README.md`)
 
 omo ships one plugin bundle that has to load on two different hosts:
 
