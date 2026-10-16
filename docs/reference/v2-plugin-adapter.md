@@ -113,6 +113,14 @@ use, and two seams plug host-specific behavior into pre-existing extension point
 - `session-activity.ts` is read by the shim's `session.status`; it is fed from the session index's
   event subscription rather than opening another stream.
 
+Three shim behaviors were corrected against 2.0.30 and are worth keeping in mind when touching it:
+`session.create` **forwards `parentID`** (and warns once if a host ignores it, instead of failing the
+create), `session.summarize` **maps onto `ctx.session.compact`** and **rejects** on failure (no call
+site inspects `response.error`, so returning `{error}` would read as "compacted"), and tools get the
+host's own `context.signal` — a fabricated `AbortController().signal` never aborts, so an interrupt
+would leave a long call running. Live captures:
+[`../../.omo/evidence/20261016-v2-shim-parity-gaps/`](../../.omo/evidence/20261016-v2-shim-parity-gaps/README.md).
+
 ## 4. Measured host facts the design depends on
 
 Each row was measured on a live 2.0.11 host and re-checked on 2.0.30 (2026-10-16). The evidence files
@@ -165,6 +173,14 @@ only V2-specific requirements are that `args` are built with `tool.schema` (see 
 `hook-mapping.ts` holds the V2 to V1 event table and the property builder. Add the entry, extend
 `hook-mapping.test.ts`, and confirm the event actually fires on a live host before relying on it.
 `session.idle` was in that table for months while the host never emitted it.
+
+If the V1 event has **no V2 counterpart at all**, the entry becomes a synthesis rather than a rename,
+and it needs state: `message.updated` is V1-namespace only, so `createV1EventMapper` pairs
+`session.step.started` (provider, model, agent, dispatch time) with `session.step.ended` (finish,
+tokens, cost) and emits the assistant message on both. `event-subscription.ts` owns one mapper per
+stream — a stateless `toV1Event` cannot carry `started`'s identity into `ended`. Keep the stateless
+export for single events, and bound the mapper's pending map (`maxPendingSteps`) so a step that never
+ends cannot leak.
 
 ## 6. What will catch you (repo gates)
 
@@ -331,6 +347,7 @@ runs inside the host.
 | Gap | State |
 |---|---|
 | TUI sidebar plugin | **Ported.** `src/tui.ts` exports `{ ...v1Module, ...createV2TuiDefinition() }`: 1.x reads `tui`, 2.x reads `setup`. The 2.x path claims `context.ui.slot({ append: "sidebar.content" })` and publishes the view through `context.storage.memory` so the slot re-renders (no manual `requestRender`). `shared/opencode-client-config.ts` picks `cli.json` + `plugins` on 2.x and `tui.json` + `plugin` on 1.x for both the installer and the doctor. See `p6-b12-tui-plugin-port.md`. |
+| `message.part.updated` | Unmapped. V2 streams parts as `session.text.*` / `session.reasoning.*`, so the three V1 consumers (`runtime-fallback/first-prompt-watchdog.ts`, `session-notification.ts`, `ralph-loop/event-handler-activity.ts`) sleep on V2. Only assistant steps are synthesized. |
 | Session title in tool output | `session_list` and `session_info` do not print a session title. Pre-existing formatter behavior. |
 | `reasoningEffort` for unknown model families | omo's shared capability guard drops the effort on purpose; identical on V1. |
 | Mid-turn compaction continuation | Host-native, verified; nothing to implement. |

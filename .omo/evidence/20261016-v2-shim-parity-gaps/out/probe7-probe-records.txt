@@ -1,0 +1,9 @@
+{"label": "setup", "hasSessionGet": "function", "hasSessionCreate": "function", "hasSessionCompact": "function", "hasToolTransform": "function", "hasEventSubscribe": "function", "at": 1792139215426}
+{"label": "shim", "hasCreate": "function", "hasSummarize": "function", "hasAbortMethod": "function", "at": 1792139215697}
+{"label": "registered", "name": "zz_shim_probe", "namespace": "zzprobe", "at": 1792139215699}
+{"label": "tool.start", "mode": "all", "sessionID": "ses_ebc2db43dffe2T9vSa4TS3CzgO", "abortIsAbortSignal": true, "at": 1792139218021}
+{"label": "create.result", "error": null, "requestedParentID": "ses_ebc2db43dffe2T9vSa4TS3CzgO", "id": "ses_ebc2db399ffe4vxC7aLzkm24Qb", "returnedParentID": "ses_ebc2db43dffe2T9vSa4TS3CzgO", "at": 1792139218034}
+{"label": "summarize.begin", "target": "ses_ebc2dc02fffeipIwjOZxFT17RK", "at": 1792139218035}
+{"label": "summarize.result", "resolved": true, "error": null, "at": 1792139218045}
+{"label": "abort.wait", "aborted": false, "at": 1792139218045}
+{"label": "abort.observed", "outcome": "aborted", "aborted": true, "at": 1792139220169}

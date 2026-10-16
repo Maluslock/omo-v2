@@ -75,7 +75,11 @@ The lifecycle subset that matters here:
 **Key structural difference:** V1 had coarse `message.updated` / `message.part.updated` events
 carrying a whole message; V2 emits **granular per-part deltas** (`session.text.delta`,
 `session.tool.progress`, …). Any V1 handler that relied on `message.updated.info.finish` needs a
-synthesized view (see §5).
+synthesized view (see §5). **Implemented 2026-10-16** (option (a)): `createV1EventMapper` in
+`packages/omo-opencode/src/v2/hook-mapping.ts` rebuilds `message.updated` from
+`session.step.started` + `session.step.ended`; `packages/omo-opencode/src/v2/event-subscription.ts`
+owns one mapper per subscription, and the live capture is in
+`.omo/evidence/20261016-v2-shim-parity-gaps/`. `message.part.updated` is still unmapped.
 
 ## 3. V1 hook handler inventory (12 handlers, from `plugin-interface.ts`)
 
@@ -123,12 +127,13 @@ propagate. `safeCreateHook` only isolates hook *construction*.
 
 ## 5. Gaps and semantics risks
 
-1. **`message.updated` synthesis.** V1 `event` handlers (`model-fallback`, `preemptiveCompaction`,
-   `sessionNotification`, …) key off `message.updated` with `info.finish`/`info.role`/`info.time`.
-   V2 emits per-part deltas. Two options: (a) synthesize `message.updated` from
-   `session.text.ended` / `session.step.ended` / `session.usage.updated`; (b) call
-   `ctx.session.context()` on `session.step.ended` and map via the P2.6 message mapper. (b) reuses
-   tested code but costs a round trip; (a) is cheaper but must reconstruct `finish`.
+1. ~~**`message.updated` synthesis.**~~ **Resolved 2026-10-16, option (a).** V1 `event` handlers
+   (`model-fallback`, `preemptiveCompaction`, `sessionNotification`, …) key off `message.updated`
+   with `info.finish`/`info.role`/`info.time`, and V2 emits per-part deltas instead.
+   `createV1EventMapper` (`packages/omo-opencode/src/v2/hook-mapping.ts`) pairs
+   `session.step.started` (provider/model/agent/dispatch time) with `session.step.ended`
+   (finish/tokens/cost) and emits the assistant `message.updated`; the subscription runs one mapper
+   per stream. Live capture: `.omo/evidence/20261016-v2-shim-parity-gaps/`.
 2. **`session.error` → ?** V2 has `session.execution.failed` and `session.step.failed`; V1
    `session.error` carried a structured `error`. Need to pick a source and map the error shape.
 3. **`session.status`** exists in both, but the V1 payload's `{type, attempt, message, next}` may

@@ -1,4 +1,4 @@
-MOCK_PORT=57197
+MOCK_PORT=46735
 BAD_SUMMARY=no
 TURN_ONE_RC=0
 TURN_ONE_EVENT_TYPES=["text"]
@@ -7,7 +7,7 @@ TURN_TWO_RC=0
 TURN_TWO_EVENT_TYPES=["text"]
 TURN_TWO_FINAL_TEXT=MOCK_REPLY
 HOST_VERSION=opencode v2.0.30
-SESSION_ID=ses_probe_compaction_1792137805
+SESSION_ID=ses_probe_compaction_1792139265
 EVENTS_TOTAL=55
 COMPACTION_EVENT_TYPES=["session.compaction.delta", "session.compaction.ended", "session.compaction.started"]
 HAS_session_compaction_started=yes
@@ -23,9 +23,9 @@ REQ_3 messages=4 has_tools=True looks_like_summary=yes has_bridge_sentinel=yes
 REQ_4 messages=2 has_tools=True looks_like_summary=yes has_bridge_sentinel=no
 SENTINEL_REQUESTS=2
 COMPACTION_HOOK_CALLS=2
-COMPACTION_HOOK_FIRST={"called": true, "sessionID": "ses_probe_compaction_1792137805", "systemIsArray": true, "messagesIsArray": true, "optionsIsRecord": true, "hasResult": false}
+COMPACTION_HOOK_FIRST={"called": true, "sessionID": "ses_probe_compaction_1792139265", "systemIsArray": true, "messagesIsArray": true, "optionsIsRecord": true, "hasResult": false}
 COMPACTION_HOOK_ERRORS=[]
 LOG_V2_COMPACTION=0
 LOG_V2_LINES=0
 ISO=ISO_OK
-SANDBOX=/tmp/oqa-xdg.y2dhCj/proj
+SANDBOX=/tmp/oqa-xdg.JbHQHQ/proj

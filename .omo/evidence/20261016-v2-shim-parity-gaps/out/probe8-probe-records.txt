@@ -1,0 +1,11 @@
+{"label": "setup", "hasSessionGet": "function", "hasSessionCreate": "function", "hasSessionCompact": "function", "hasToolTransform": "function", "hasEventSubscribe": "function", "at": 1792139409328}
+{"label": "shim", "hasCreate": "function", "hasSummarize": "function", "hasAbortMethod": "function", "at": 1792139409595}
+{"label": "registered", "name": "zz_shim_probe", "namespace": "zzprobe", "at": 1792139409599}
+{"label": "v1event", "type": "message.updated", "id": "msg_143d53984001o20gbtkpkOej8I", "sessionID": "ses_ebc2aca99ffe4WPScoPrPjTuUS", "role": "assistant", "finish": null, "providerID": "mock", "modelID": "mock-1", "agent": "build", "hasTokens": false, "timeCreated": 1792139409811, "timeCompleted": null, "at": 1792139409839}
+{"label": "v1event", "type": "message.updated", "id": "msg_143d53984001o20gbtkpkOej8I", "sessionID": "ses_ebc2aca99ffe4WPScoPrPjTuUS", "role": "assistant", "finish": "stop", "providerID": "mock", "modelID": "mock-1", "agent": "build", "hasTokens": true, "timeCreated": 1792139409811, "timeCompleted": 1792139409833, "at": 1792139409840}
+{"label": "v1event", "type": "message.updated", "id": "msg_143d5419a001zqpbIoZgpJC2dT", "sessionID": "ses_ebc2abeb5ffeK6vH78YXBP2QuO", "role": "assistant", "finish": null, "providerID": "mock", "modelID": "mock-1", "agent": "build", "hasTokens": false, "timeCreated": 1792139411882, "timeCompleted": null, "at": 1792139411904}
+{"label": "tool.start", "mode": "all", "sessionID": "ses_ebc2abeb5ffeK6vH78YXBP2QuO", "abortIsAbortSignal": true, "at": 1792139411907}
+{"label": "create.result", "error": null, "requestedParentID": "ses_ebc2abeb5ffeK6vH78YXBP2QuO", "id": "ses_ebc2abe3cffeyX5rlu6h31j97o", "returnedParentID": "ses_ebc2abeb5ffeK6vH78YXBP2QuO", "at": 1792139411914}
+{"label": "summarize.result", "resolved": true, "error": null, "at": 1792139411918}
+{"label": "abort.observed", "outcome": "aborted", "aborted": true, "at": 1792139414021}
+{"label": "v1event.stream", "settled": true, "at": 1792139417181}

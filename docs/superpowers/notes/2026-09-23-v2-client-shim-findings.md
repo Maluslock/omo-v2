@@ -6,6 +6,11 @@
 > `docs/superpowers/plans/2026-09-24-omo-v2-full-parity.md` sections 2 and 3, with evidence under
 > `.omo/evidence/20260923-v2-alignment/`.
 
+> **Corrected again (2026-10-16, opencode 2.0.30).** Three of the §8.1 corrections below were
+> themselves wrong; see §9 at the end. The shim now forwards `parentID`, maps `session.summarize`
+> onto `ctx.session.compact`, and hands tools the host's own `AbortSignal`. Live captures:
+> `.omo/evidence/20261016-v2-shim-parity-gaps/`.
+
 > P2.5 pre-work spike. Question: **can a V1-SDK-shaped `client` be reproduced from OpenCode
 > V2's plugin `Context` domains, to unlock the tools currently skipped by
 > `CLIENT_DEPENDENT_TOOLS`?**
@@ -249,3 +254,23 @@ load. That requires an environment where the V2 client/background-service path s
 session idle before the synchronous path, so there is normally no running turn to steer. This
 choice is implemented but still **not runtime-verified** against a live model.
 
+## 9. Correction (2026-10-16, opencode 2.0.30)
+
+Live captures: `.omo/evidence/20261016-v2-shim-parity-gaps/` (runner, probe plugin, raw NDJSON).
+
+- **§8.1, "`parentID` is not supported" - wrong on 2.0.30.** `shim.session.create({body:{parentID}})`
+  returns the parent it was given (`CREATE_RETURNED_PARENTID` == `CREATE_REQUESTED_PARENTID`) and an
+  independent host `GET /api/session/{id}` agrees (`CHILD_PARENT_MATCH=yes`). The earlier probe read
+  the field off the *wrong* response shape. `packages/omo-opencode/src/v2/client-shim.ts` forwards
+  `parentID` and warns once if a host ignores it.
+- **§8.1, "`session.summarize` has no domain equivalent" - outdated.** `ctx.session.compact` exists on
+  2.0.30 and is now the shim's target; the capture shows the host running a real compaction
+  (`session.compaction.started` → `delta` → `ended`) on the session the shim was pointed at. The V1
+  `providerID`/`modelID`/`auto` body fields have no counterpart and are dropped with a warning.
+- **§8.1, "`session.status` / `session.todo` are honest empty stubs" - stale for `status`.** It is
+  rebuilt from the host event stream (see `docs/reference/v2-port-summary.md` §4 and `5b3e790`).
+- **New in the same change:** tools no longer receive a fabricated never-aborting signal. The host's
+  own `context.signal` is passed through (2.0.15+), which is what makes a user interrupt reach a
+  running tool - verified live (~2s after `POST /api/session/{sessionID}/interrupt`).
+- Also pinned down: **project plugins load lazily, on the first turn**, so any session created before
+  the first prompt is invisible to `session.created` subscribers (raw wire still carries it).

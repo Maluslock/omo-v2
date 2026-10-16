@@ -1,0 +1,20 @@
+2026-10-16T16:27:45+08:00 group1 start: probe2 probe3 probe5
+2026-10-16T16:27:57+08:00 probe2 rc=0
+2026-10-16T16:27:57+08:00 probe3 rc=0
+2026-10-16T16:27:57+08:00 probe5 rc=0
+2026-10-16T16:27:57+08:00 group2 start: probe4 ordering, probe4b subagent liveness, probe5b bad summary, serve catalog, raw wire
+2026-10-16T16:28:13+08:00 probe4 rc=0
+2026-10-16T16:28:18+08:00 probe4b rc=0
+2026-10-16T16:28:18+08:00 probe5b rc=0
+2026-10-16T16:28:18+08:00 serve-catalog rc=0
+2026-10-16T16:28:18+08:00 raw-wire rc=0
+2026-10-16T16:28:18+08:00 group3: probe1 alone (shared plugin log delta)
+2026-10-16T16:28:40+08:00 probe1 rc=0
+2026-10-16T16:28:40+08:00 group4: probe6 alone (TUI)
+2026-10-16T16:29:07+08:00 probe6 rc=0
+2026-10-16T16:29:07+08:00 schema-diff (static, no host needed)
+2026-10-16T16:29:07+08:00 schema-diff rc=0
+2026-10-16T16:29:07+08:00 real-db read-only check (static, no sandbox)
+2026-10-16T16:29:08+08:00 real-db rc=0
+2026-10-16T16:29:09+08:00 janitor swept 1 sandbox(es)
+2026-10-16T16:29:09+08:00 done

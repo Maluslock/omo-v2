@@ -1,18 +1,18 @@
 HOST_VERSION=opencode v2.0.30
-SANDBOX_SERVICE_PORT=57967
-SANDBOX_SERVICE_STATE=57967
+SANDBOX_SERVICE_PORT=39971
+SANDBOX_SERVICE_STATE=39971
 GLOBAL_SERVICE_BEFORE=http://127.0.0.1:49374 pid=1291721
 GLOBAL_SERVICE_AFTER=http://127.0.0.1:49374 pid=1291721
 GLOBAL_SERVICE_UNTOUCHED=yes
 PANEL_RENDERED=yes
-MIRROR_DIR=/tmp/oqa-xdg.46g5yv/data/opencode/storage/oh-my-openagent/tui-state
+MIRROR_DIR=/tmp/oqa-xdg.W5cENL/data/opencode/storage/oh-my-openagent/tui-state
 MIRROR_JSON_FILES=1
 MIRROR_KEYS=activeAgents,jobBoard,loop,projectDir,updatedAt,version
 MIRROR_HAS_FIELDS=yes
-SANDBOX_LOG=/tmp/oqa-xdg.46g5yv/data/opencode/log/opencode.log
+SANDBOX_LOG=/tmp/oqa-xdg.W5cENL/data/opencode/log/opencode.log
 PLUGIN_LOG_DELTA=21
 LOG_TUI_LINES=0
-LOG_V2_ANY=8
+LOG_V2_ANY=7
 REG_AGENTS={"agentCount":12,"defaultAgent":"Sisyphus - ultraworker"}
 REG_TOOLS={"registered":13,"skipped":1,"skippedTools":["skill"]}
 REG_HOOKS={"registered":12}

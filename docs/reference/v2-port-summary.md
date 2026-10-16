@@ -41,7 +41,7 @@ host generations and renders into the 2.x `sidebar.content` slot.
 | `experimental.chat.system.transform` | `session.hook("context").system` | ported |
 | `experimental.session.compacting` | `session.hook("compaction")` | ported |
 | `compaction.autocontinue` | `session.compaction.ended` state restore | ported; continuation is host-native |
-| `event` | `ctx.event.subscribe` + a corrected event vocabulary | ported |
+| `event` | `ctx.event.subscribe` + a corrected event vocabulary + `message.updated` synthesized from the V2 step events | ported |
 | `tool.execute.before/after` | `ctx.tool.hook(...)` | ported |
 | `permission` | fail-closed self-answer (`ask-resolver.ts`) | ported as far as the host allows |
 | Session enumeration | omo's own index in `ctx.storage` + a read-only host-store backfill | ported |
@@ -79,6 +79,18 @@ V2 port bugs:
 - Team members were aborted mid-turn because `session.status` was an empty stub (`5b3e790`).
 - Every idle-keyed hook was dead because `session.idle` has no V2 counterpart (`5b3e790`).
 - `client.tui.showToast` was missing, so every command route returned HTTP 500 (`1492a33`).
+- Every hook keyed on `message.updated` - preemptive compaction, runtime fallback, the todo enforcer,
+  session notifications, the Anthropic recovery hook, about twenty call sites in all - was **dormant on
+  V2**, because `message.updated` exists only in the schema's V1 namespace and nothing synthesized it.
+  V2's `session.step.started` (provider, model, agent, dispatch time) and `session.step.ended` (finish,
+  tokens, cost) now rebuild it through a stateful mapper, so the event reaches the V1 handlers with the
+  fields they read.
+- `session.summarize` had no V2 target: the shim never exposed `ctx.session.compact`, so every call threw
+  a `TypeError` that the V1 call sites swallow. It is now mapped, and it rejects (rather than returning
+  `{error}`) because no call site inspects `response.error`.
+- `session.create` dropped `parentID`, so subagent sessions were created unlinked from their parent.
+- Tools were handed a fabricated `AbortController().signal` nothing could abort; they now get the host's
+  own `context.signal`, so a user interrupt reaches a running tool.
 
 Pre-existing bugs found while probing (not V2-specific):
 
@@ -105,6 +117,8 @@ Every capability follows the same ladder, and the evidence files record each run
 5. **Full suite** compared against the known baseline of 13 pre-existing failures.
 
 Current state: `bun test` reports 12943 pass / 3 skip / 13 fail, and `tsgo --noEmit` exits 0.
+The V2 subset alone - `bun test packages/omo-opencode/src/v2/` - is 282 pass / 0 fail after the
+`message.updated` synthesis (2026-10-16).
 
 ## 6. Commit map
 
@@ -123,6 +137,7 @@ Current state: `bun test` reports 12943 pass / 3 skip / 13 fail, and `tsgo --noE
 | Category `max_tokens`, config docs | `bc769b6`, `48cee04` |
 | Session enumeration backfill | `ca7fa33` |
 | `reasoningEffort` resolution, TUI shape finding | `9f450e2` |
+| 2.0.30 re-verification, and the parity gaps it exposed | `2201e6348`, `f73a145d5` (probe table), `73b18b061` (client shim), `c77056cc6` (`message.updated` synthesis) |
 
 ## 7. Open items
 
@@ -131,6 +146,7 @@ Current state: `bun test` reports 12943 pass / 3 skip / 13 fail, and `tsgo --noE
 | TUI sidebar plugin | **Closed** (`2d5ef10`): both blockers recorded here before the port are resolved. The client-config target now resolves per host generation (`cli.json` + `plugins` for 2.x, `tui.json` + `plugin` for 1.x), and `dist/tui.js` exports both host generations, with the 2.x path claiming `sidebar.content` and publishing through `context.storage.memory`. Evidence: `p6-b12-tui-plugin-port.md`. |
 | Session titles in tool output | `session_list` and `session_info` do not print a session title. Pre-existing formatter behavior, unrelated to V2. |
 | `reasoningEffort` for unknown model families | Dropped on purpose by omo's shared capability guard, identically on V1. |
+| V1 `message.part.updated` | Still unmapped: V2 streams parts as `session.text.*` / `session.reasoning.*`, and the three V1 consumers (`runtime-fallback/first-prompt-watchdog.ts`, `session-notification.ts`, `ralph-loop/event-handler-activity.ts`) sleep on V2. Only assistant steps are synthesized today. |
 | npm publishing | Not done in this fork. The published package still exports the V1 `{id, server}` shape and is rejected by 2.0.11; shipping the V2 adapter goes through the release workflow. |
 
 ## 8. How to re-verify
@@ -206,6 +222,13 @@ All under `../../.omo/evidence/20260923-v2-alignment/` (force-added because `.om
 | `p6-b11-tui-plugin-v1-shape.md` | The TUI module shape failure |
 | `p6-b12-tui-plugin-port.md` | The TUI sidebar port: dual-generation export, `sidebar.content`, and the client-config target |
 | `p6-real-config-smoke.md`, `p6-c1-local-build.md` | Real-config smoke and the supported build recipe |
+
+The client-shim parity fixes and the `message.updated` synthesis were verified live in a third
+directory, `../../.omo/evidence/20261016-v2-shim-parity-gaps/` (force-added): `README.md` (the four
+verdicts and what they do *not* prove), `run-shim-parity-probe.sh`, the probe plugin
+`zz-shim-parity-probe.ts` (it imports the production `v2/client-shim.ts`, `v2/tool-mapping.ts` and
+`v2/event-subscription.ts` and is driven by a real tool call), `mock-provider.py`, and the captures
+under `out/` (`probe7-*` for the three shim fixes, `probe8-*` for the synthesis).
 
 The 2.0.30 re-verification lives in its own directory,
 `../../.omo/evidence/20261016-opencode-2030-recheck/` (also force-added): `README.md`; the probe scripts

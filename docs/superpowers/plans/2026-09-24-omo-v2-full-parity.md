@@ -104,9 +104,23 @@ service -> evidence under `.omo/evidence/20260923-v2-alignment/` -> commit.
    connection API is not a usability signal, and the fail-open fallback already yields the right set).
 7. **P6-B2** task tools, **P6-B3** monitor, **P6-B4** team runtime and **P6-B5/B6** the three gaps
    those probes exposed (background liveness, the V1 idle mapping, the dead `chat.params` chain) - all
-   done. The remaining V2-native work is `ctx.generate.text` for judge/summarize steps,
-   `ctx.worktree`/`ctx.vcs` for non-team git orchestration, and `ctx.storage` for anything currently
-   file-backed.
+   done. The "remaining V2-native work" once listed here was re-checked on 2026-10-16 and is either
+   already satisfied or not a real gap: `ctx.generate.text` has **no call site** anywhere in `src/`
+   (judge/summarize go through the shim's `session.prompt`), team worktrees are **plain git**
+   (`features/team-mode/team-runtime/create.ts`, `hooks/start-work/worktree-detector.ts`), and
+   `ctx.storage` is **already in use** (`v2/session-index.ts`, `v2/register-session-index.ts`,
+   `tui.ts`), while task/monitor/team state is deliberately file-backed.
+8. **V2 parity gaps closed on 2026-10-16** (P3's deferred item plus three shim defects found while
+   re-verifying on 2.0.30; live evidence in `.omo/evidence/20261016-v2-shim-parity-gaps/`):
+   - **`message.updated` synthesis** - the one P3 explicitly deferred. V2 has no such event (it is
+     V1-namespace only), so ~20 call sites keyed on it - preemptive compaction, runtime fallback, the
+     todo enforcer, session notifications, the Anthropic recovery hook - were dormant. It is now
+     rebuilt from `session.step.started` + `session.step.ended` by a stateful mapper
+     (`createV1EventMapper` in `v2/hook-mapping.ts`), which is what makes the event carry
+     `providerID`/`modelID`/`agent` alongside `finish`/`tokens`. `message.part.updated` remains open.
+   - **`session.summarize`** now maps onto `ctx.session.compact` (and rejects instead of returning
+     `{error}`, which no call site inspects); **`session.create`** forwards `parentID`; tools receive
+     the host's own `context.signal` instead of a never-aborting fabricated one.
 9. **P6-B1** session index for `session_list/search/info` (storage-backed) **plus P6-B9**, its
    completeness gap: the index only starts when omo loads, so the adapter also reads the host's
    SQLite store read-only. The TUI-companion alternative was dropped (needs a live TUI; the host's

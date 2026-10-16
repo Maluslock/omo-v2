@@ -1,8 +1,8 @@
 HOST_VERSION=opencode v2.0.30
 RUN_RC=0
-DUMP_LINES=45
-SESSION_SCOPED=session.execution.started,session.execution.succeeded,session.inbox.delivered,session.inbox.enqueued,session.instructions.updated,session.reasoning.delta,session.reasoning.ended,session.reasoning.started,session.step.ended,session.step.started,session.step.streamed,session.text.delta,session.text.ended,session.text.started,session.usage.updated
-OBSERVED_TOTAL=27
+DUMP_LINES=42
+SESSION_SCOPED=session.execution.started,session.execution.succeeded,session.inbox.delivered,session.inbox.enqueued,session.instructions.updated,session.step.ended,session.step.started,session.step.streamed,session.text.delta,session.text.ended,session.text.started,session.usage.updated
+OBSERVED_TOTAL=24
 CRITICAL session.execution.started=PRESENT (turn start)
 CRITICAL session.execution.succeeded=PRESENT (turn end -> session.idle mapping)
 CRITICAL session.created=ABSENT (session lifecycle)
@@ -14,4 +14,4 @@ ISO_BEFORE=297
 ISO_AFTER=297
 ISO=ISO_OK
 DUMP=/home/user/omo-v2/.omo/tmp/event-catalog-2030/dump.jsonl
-SANDBOX=/tmp/oqa-xdg.Nx5b5x/proj
+SANDBOX=/tmp/oqa-xdg.3W1Ruu/proj
