@@ -355,7 +355,7 @@ Individual scripts, if you want one at a time:
 | `raw-event-stream-2030.sh` | `out/probe-raw-wire.txt` |
 | `schema-diff-2030.sh` (static) | `out/schema-diff.txt` |
 | `real-db-readonly-2030.sh` (static, read-only) | `out/real-db-readonly.txt` |
-| `verify-cleanup-2030.sh` (wraps the TUI probe) | `out/qa-lib-cleanup.txt` |
+| `verify-cleanup-2030.sh` (re-runs the TUI probe) | `out/qa-lib-cleanup.txt`, and refreshes `out/probe6-tui-slot.txt` |
 
 Helpers they share: `event-catalog-probe-2030.ts` (the subscribing probe plugin),
 `mock-provider.py` (fake OpenAI-compatible provider, `--reply`/`--summary-file`/`--delay-seconds`),
