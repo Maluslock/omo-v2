@@ -46,6 +46,67 @@ describe("startV2EventSubscription", () => {
     await subscription.dispose()
   })
 
+  it("correlates session.step.started with the session.step.ended across iterations", async () => {
+    const dispatched: V1EventInput[] = []
+
+    const subscription = startV2EventSubscription({
+      subscribe: (options) =>
+        cooperative(
+          [
+            {
+              type: "session.step.started",
+              created: 1_000,
+              data: {
+                sessionID: "ses_1",
+                assistantMessageID: "msg_1",
+                agent: "sisyphus",
+                model: { id: "deepseek-v4-pro", providerID: "deepseek" },
+                started: 900,
+              },
+            },
+            IDLE,
+            {
+              type: "session.step.ended",
+              created: 2_000,
+              data: {
+                sessionID: "ses_1",
+                assistantMessageID: "msg_1",
+                finish: "stop",
+                tokens: { input: 1, output: 2 },
+              },
+            },
+          ],
+          options?.signal as AbortSignal,
+        ),
+      dispatch: (input) => {
+        dispatched.push(input)
+      },
+    })
+
+    await sleep(10)
+    expect(dispatched.map((input) => input.event.type)).toEqual([
+      "message.updated",
+      "session.idle",
+      "message.updated",
+    ])
+    const startedInfo = dispatched[0]?.event.properties.info as Record<string, unknown>
+    expect(startedInfo).toMatchObject({ id: "msg_1", role: "assistant", providerID: "deepseek" })
+    expect(startedInfo.finish).toBeUndefined()
+    // The identity the start event announced survives the intervening idle event.
+    const endedInfo = dispatched[2]?.event.properties.info as Record<string, unknown>
+    expect(endedInfo).toMatchObject({
+      id: "msg_1",
+      role: "assistant",
+      finish: "stop",
+      providerID: "deepseek",
+      modelID: "deepseek-v4-pro",
+      agent: "sisyphus",
+    })
+    expect(endedInfo.time).toEqual({ created: 900, completed: 2_000 })
+
+    await subscription.dispose()
+  })
+
   it("isolates a dispatch failure and keeps consuming", async () => {
     const dispatched: string[] = []
     const failures: Array<{ error: unknown; type: string }> = []

@@ -1,15 +1,19 @@
 // packages/omo-opencode/src/v2/event-subscription.ts
 import { log } from "../shared"
-import { toV1Event, type V1EventInput } from "./hook-mapping"
+import { createV1EventMapper, type V1EventInput } from "./hook-mapping"
 
 /**
  * Drives omo's V1 `event` handler from the V2 event stream.
  *
  * V2 exposes `ctx.event.subscribe(requestOptions?)` as an `AsyncIterable` of flat event
  * envelopes whose `requestOptions.signal` cancels the underlying stream. This runner consumes
- * that iterable, converts each envelope with `toV1Event`, and dispatches to the assembled V1
- * handler. It never throws into `setup`: stream failures and per-event dispatch failures are
- * logged (per-event isolation mirrors V1's `createEventHookRunner`).
+ * that iterable, converts each envelope with a per-subscription `createV1EventMapper()`, and
+ * dispatches to the assembled V1 handler. It never throws into `setup`: stream failures and
+ * per-event dispatch failures are logged (per-event isolation mirrors V1's `createEventHookRunner`).
+ *
+ * The mapper is stateful on purpose: the synthesized `message.updated` for a finished step has to
+ * carry the provider/model/agent that only that step's `session.step.started` announced, so the two
+ * events must be correlated across iterations.
  *
  * `dispose()` aborts the stream and resolves once the loop unwinds. A non-cooperative iterable
  * cannot hold teardown open forever: the wait is bounded and a timeout is logged.
@@ -41,12 +45,13 @@ function describeError(error: unknown): string {
 export function startV2EventSubscription(options: EventSubscriptionOptions): EventSubscription {
   const controller = new AbortController()
   const disposeTimeoutMs = options.disposeTimeoutMs ?? DEFAULT_DISPOSE_TIMEOUT_MS
+  const mapper = createV1EventMapper()
   let disposed = false
 
   const consume = async (): Promise<void> => {
     try {
       for await (const event of options.subscribe({ signal: controller.signal })) {
-        const input = toV1Event(event)
+        const input = mapper.toV1Event(event)
         if (input === undefined) continue
         try {
           await options.dispatch(input)
