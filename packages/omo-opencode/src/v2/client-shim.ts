@@ -16,8 +16,16 @@ import { sessionActivityStatuses } from "./session-activity"
  * `docs/superpowers/notes/2026-09-23-v2-client-shim-findings.md`). Lossy/unavailable pieces
  * are explicit, never silent:
  *
- * - `session.create` has no `parentID` (the V2 request schema omits it and the route ignores
- *   it), so child-session linkage is dropped with a one-time warning.
+ * - `session.create` forwards `parentID`: the V2 request schema gained the field in the 2.0.30
+ *   line and the host honours it over HTTP, so subagent sessions link to their parent again. A
+ *   host that ignores it only gets a one-time warning - the created session still comes back, so
+ *   the caller is told the link was dropped instead of losing it silently.
+ * - `session.summarize` maps onto `ctx.session.compact`, which the plugin session domain exposes
+ *   only from 2.0.30 on. Hosts without it (and hosts whose compaction fails) get a REJECTION, not
+ *   an `{error}` response: none of the three call sites inspects `response.error`, so a returned
+ *   error would be read as "compacted" while the session grows. V1's `providerID`/`modelID`/`auto`
+ *   body fields have no V2 counterpart (compact uses the session's own model) and are dropped with
+ *   one warning.
  * - `session.prompt` accepts no `agent`/`model`/`system`/`tools`/generation params; the shim
  *   maps `agent`/`model` onto `switchAgent`/`switchModel` and warns once about the rest.
  * - `session.todo` has no V2 domain equivalent and is an honest empty stub. `session.status` has no
@@ -38,6 +46,7 @@ export type V2ClientShimSource = {
     readonly get: (input: { readonly sessionID: string }) => Promise<unknown>
     readonly context?: (input: { readonly sessionID: string }) => Promise<unknown>
     readonly create?: (input: Json) => Promise<unknown>
+    readonly compact?: (input: { readonly sessionID: string }) => Promise<unknown>
     readonly prompt?: (input: Json) => Promise<unknown>
     readonly interrupt?: (input: { readonly sessionID: string }) => Promise<unknown>
     readonly switchAgent?: (input: { readonly sessionID: string; readonly agent: string }) => Promise<unknown>
@@ -62,6 +71,7 @@ export type V1ShimClient = {
     abort: (input: { path?: { id?: string } }) => Promise<V1ShimResponse<boolean>>
     status: () => Promise<V1ShimResponse<Json>>
     todo: (input?: Json) => Promise<V1ShimResponse<unknown[]>>
+    summarize: (input: { path?: { id?: string }; body?: Json; query?: Json }) => Promise<V1ShimResponse<unknown>>
     promptAsync?: (input: V1ShimPromptInput) => Promise<unknown>
     prompt?: (input: V1ShimPromptInput) => Promise<unknown>
   }
@@ -162,6 +172,9 @@ function promptFiles(body: Json): Json[] {
 
 const UNMAPPABLE_PROMPT_KEYS = ["system", "tools", "temperature", "topP", "maxOutputTokens", "options"] as const
 
+/** V1 `session.summarize` body fields with no V2 `ctx.session.compact` counterpart. */
+const UNMAPPABLE_SUMMARIZE_KEYS = ["providerID", "modelID", "auto"] as const
+
 /**
  * Build the immutable V1-client-shaped shim for one V2 plugin context.
  *
@@ -188,21 +201,29 @@ export function createV1ClientShim(source: V2ClientShimSource): Json {
     const body = isRecord(input?.body) ? input.body : {}
     const query = isRecord(input?.query) ? input.query : {}
     const queryDirectory = typeof query.directory === "string" ? query.directory : undefined
-    if (typeof body.parentID === "string") {
-      warnOnce(
-        "session.create.parentID",
-        "[v2][client-shim] session.create: parentID is not supported by the V2 session API; subagent sessions will not be linked to their parent",
-      )
-    }
+    const parentID = typeof body.parentID === "string" ? body.parentID : undefined
     const request: Json = {
       ...(typeof body.id === "string" ? { id: body.id } : {}),
       ...(typeof body.title === "string" ? { title: body.title } : {}),
+      ...(parentID !== undefined ? { parentID } : {}),
       ...(typeof body.agent === "string" ? { agent: body.agent } : {}),
       ...(isRecord(body.model) ? { model: body.model } : {}),
       location: { directory: queryDirectory ?? directory },
     }
     try {
-      return { data: normalizeSessionInfo(await session.create(request), queryDirectory ?? directory) }
+      const created = normalizeSessionInfo(await session.create(request), queryDirectory ?? directory)
+      // Hosts before 2.0.30 have no `parentID` in the request schema and drop the field, so a
+      // subagent session would silently lose its parent (and `session_v2.parent_id` stays null,
+      // which makes omo's index list the child as a top-level session). Report the drop once
+      // instead of failing the create - the caller still gets a usable session.
+      if (parentID !== undefined && created.parentID !== parentID) {
+        warnOnce(
+          "session.create.parentID.ignored",
+          "[v2][client-shim] session.create: the host ignored parentID; the subagent session is not linked to its parent",
+          { parentID },
+        )
+      }
+      return { data: created }
     } catch (error) {
       return { data: undefined, error }
     }
@@ -249,6 +270,41 @@ export function createV1ClientShim(source: V2ClientShimSource): Json {
     } catch (error) {
       return { data: false, error }
     }
+  }
+
+  // V1 `session.summarize` is the compaction entry point for three call sites: the preemptive
+  // compaction trigger, the post-compaction degradation monitor, and the anthropic context-window
+  // recovery. Their V2 equivalent is `ctx.session.compact`, which only the 2.0.30 plugin session
+  // domain exposes - and which takes no model. Unlike the rest of this shim, a failure REJECTS:
+  // those call sites `await` without ever reading `response.error`, so a returned error would be
+  // read as success (they mark the session compacted and clear their recovery state) while the
+  // session keeps growing past the context window.
+  const summarize = async (input: {
+    path?: { id?: string }
+    body?: Json
+    query?: Json
+  }): Promise<V1ShimResponse<unknown>> => {
+    const id = input?.path?.id
+    if (typeof id !== "string") throw new Error("session.summarize requires path.id")
+    if (typeof session.compact !== "function") {
+      warnOnce(
+        "session.summarize.unavailable",
+        "[v2][client-shim] session.summarize: this host exposes no session.compact domain; compaction is unavailable",
+      )
+      throw new Error(
+        "session.summarize is not available on this host: the V2 plugin session domain has no compact method (needs @opencode/plugin >= 2.0.30)",
+      )
+    }
+    const body = isRecord(input?.body) ? input.body : {}
+    for (const key of UNMAPPABLE_SUMMARIZE_KEYS) {
+      if (body[key] !== undefined) {
+        warnOnce(
+          `session.summarize.${key}`,
+          `[v2][client-shim] session.summarize: "${key}" has no V2 compact equivalent and was dropped (compact uses the session's own model)`,
+        )
+      }
+    }
+    return { data: await session.compact({ sessionID: id }) }
   }
 
   const switchTarget = async (sessionID: string, body: Json): Promise<void> => {
@@ -304,6 +360,7 @@ export function createV1ClientShim(source: V2ClientShimSource): Json {
     messages,
     message,
     abort,
+    summarize,
     // `session.status` is reconstructed from the host event stream (`session.execution.*` plus the
     // per-step heartbeats) instead of returning an empty map - see `session-activity.ts` for why an
     // empty map makes the background manager stop live subagents. `session.todo` stays a stub: V2

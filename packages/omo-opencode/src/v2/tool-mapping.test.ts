@@ -135,7 +135,7 @@ describe("toV2Tool", () => {
     ).rejects.toThrow("ask() is not available in this host; refusing to auto-approve")
   })
 
-  it("supplies a distinct abort signal per execute call", async () => {
+  it("supplies a distinct abort signal per execute call when the host exposes none", async () => {
     const signals: AbortSignal[] = []
     const v2 = toV2Tool(
       "probe",
@@ -154,6 +154,36 @@ describe("toV2Tool", () => {
     await v2.execute({}, ctx)
     expect(signals).toHaveLength(2)
     expect(signals[0]).not.toBe(signals[1])
+    expect(signals[0]?.aborted).toBe(false)
+  })
+
+  it("hands the tool the host's own abort signal so an interrupt reaches a running call", async () => {
+    // given a host that cancels tool calls (the 2.0.15+ ToolContext exposes `signal`)
+    const host = new AbortController()
+    const signals: AbortSignal[] = []
+    const v2 = toV2Tool(
+      "probe",
+      {
+        description: "d",
+        args: {},
+        execute: async (_args: unknown, ctx: { abort: AbortSignal }) => {
+          signals.push(ctx.abort)
+          return "ok"
+        },
+      },
+      { namespace: "omo", directory: "/work" },
+    )
+
+    // when a tool runs and the user then interrupts the session
+    await v2.execute(
+      {},
+      { sessionID: "s", agent: "a", messageID: "m", id: "c", progress: async () => {}, signal: host.signal } as never,
+    )
+    host.abort()
+
+    // then the tool observes the very signal the host aborted, not a detached non-aborting one
+    expect(signals[0]).toBe(host.signal)
+    expect(signals[0]?.aborted).toBe(true)
   })
 
   it("forwards ask to opts.ask when supplied", async () => {

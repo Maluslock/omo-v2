@@ -85,6 +85,8 @@ type V2Context = {
   messageID: string
   id: string
   progress: (update: Record<string, unknown>) => Promise<void> | unknown
+  /** Present from the 2.0.15 line on; 2.0.11 has no cancellation channel at all. */
+  signal?: AbortSignal
 }
 
 type V2Content = { type: "text"; text: string } | { type: "file"; uri: string; mime: string; name?: string }
@@ -144,10 +146,11 @@ export function normalizeToolResult(result: unknown): {
 }
 
 /**
- * V2 ToolContext has no `directory`, `worktree`, `abort`, `ask`, or `metadata`.
+ * V2 ToolContext has no `directory`, `worktree`, `ask`, or `metadata`.
  * - directory/worktree: static fallback to the plugin location (session moves are NOT reflected; see P2 findings).
- * - abort: a fresh non-aborting signal is created per `execute` call because V2 exposes no
- *   cancellation; the signal isolates calls but never aborts.
+ * - abort: the host's own `signal` when it exposes one (2.0.15+; it fires on user interrupt and on
+ *   host-side cancellation), otherwise a fresh non-aborting signal, because 2.0.11 offers no
+ *   cancellation channel. Without this a long tool call keeps running after the user interrupts.
  * - ask: fail-closed. Unless an `ask` resolver is supplied via `opts.ask`, the shim rejects
  *   with "ask() is not available in this host; refusing to auto-approve" rather than silently
  *   granting consent.
@@ -173,7 +176,10 @@ export function toV2Tool(
     input: tool.schema.object(args as unknown as PluginArgsShape),
     options: { namespace: opts.namespace, codemode: false },
     execute: async (input, context) => {
-      const controller = new AbortController()
+      // Prefer the host's cancellation signal: it aborts when the user interrupts the session.
+      // Hosts without one keep the previous behaviour (a signal that isolates the call but never
+      // fires), so V1 tool bodies that listen on `ctx.abort` still see a well-formed AbortSignal.
+      const abortSignal = context.signal instanceof AbortSignal ? context.signal : new AbortController().signal
       const shimmed: V1ToolContext = {
         sessionID: context.sessionID,
         messageID: context.messageID,
@@ -183,7 +189,7 @@ export function toV2Tool(
         callID: context.id,
         callId: context.id,
         call_id: context.id,
-        abort: controller.signal,
+        abort: abortSignal,
         metadata: (i: { title?: string; metadata?: Record<string, unknown> }) => {
           void context.progress({ ...(i.metadata ?? {}), ...(i.title !== undefined ? { title: i.title } : {}) })
         },

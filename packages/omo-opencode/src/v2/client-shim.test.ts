@@ -12,10 +12,11 @@ type Calls = {
   interrupt: Array<Record<string, unknown>>
   switchAgent: Array<Record<string, unknown>>
   switchModel: Array<Record<string, unknown>>
+  compact: Array<Record<string, unknown>>
 }
 
 function createSource(overrides: Partial<V2ClientShimSource["session"]> = {}, extra: Partial<V2ClientShimSource> = {}) {
-  const calls: Calls = { get: [], create: [], context: [], prompt: [], interrupt: [], switchAgent: [], switchModel: [] }
+  const calls: Calls = { get: [], create: [], context: [], prompt: [], interrupt: [], switchAgent: [], switchModel: [], compact: [] }
   const source: V2ClientShimSource = {
     location: { directory: "/work" },
     session: {
@@ -67,6 +68,10 @@ function createSource(overrides: Partial<V2ClientShimSource["session"]> = {}, ex
       },
       switchModel: async (input) => {
         calls.switchModel.push(input)
+      },
+      compact: async (input) => {
+        calls.compact.push(input)
+        return { id: "compaction_1", status: "completed" }
       },
       ...overrides,
     },
@@ -120,7 +125,7 @@ describe("createV1ClientShim session domain", () => {
     expect(result.error).toBeInstanceOf(Error)
   })
 
-  it("maps session.create body/query and never forwards parentID", async () => {
+  it("maps session.create body/query and forwards parentID so subagent sessions link to their parent", async () => {
     const { source, calls } = createSource()
     const client: V1ShimClient = createV1ClientShim(source)
     const result = await client.session.create({
@@ -135,11 +140,37 @@ describe("createV1ClientShim session domain", () => {
     expect(calls.create).toEqual([
       {
         title: "child",
+        parentID: "ses_parent",
         model: { id: "sonnet", providerID: "anthropic" },
         location: { directory: "/work/sub" },
       },
     ])
     expect(result.data?.directory).toBe("/work/sub")
+  })
+
+  it("still returns the session when the host ignores parentID instead of failing the create", async () => {
+    // given a host whose create drops parentID (the pre-2.0.30 schema)
+    const { source } = createSource({
+      create: async (input) => ({ id: "ses_new", title: input.title, location: { directory: "/work/sub" } }),
+    })
+    const client: V1ShimClient = createV1ClientShim(source)
+
+    // when
+    const result = await client.session.create({ body: { parentID: "ses_parent", title: "child" } })
+
+    // then the caller keeps a usable session; the dropped link is reported by a one-time warning
+    expect(result.error).toBeUndefined()
+    expect(result.data?.id).toBe("ses_new")
+    expect(result.data?.parentID).toBeUndefined()
+  })
+
+  it("returns the linked session when the host honours parentID", async () => {
+    const { source } = createSource({
+      create: async (input) => ({ id: "ses_new", title: input.title, parentID: input.parentID }),
+    })
+    const client: V1ShimClient = createV1ClientShim(source)
+    const result = await client.session.create({ body: { parentID: "ses_parent", title: "child" } })
+    expect(result.data?.parentID).toBe("ses_parent")
   })
 
   it("falls back to the plugin location when session.create has no query directory", async () => {
@@ -294,6 +325,52 @@ describe("createV1ClientShim session domain", () => {
     const result = await client.session.abort({ path: { id: "ses_1" } })
     expect(result.data).toBe(false)
     expect(result.error).toBeInstanceOf(Error)
+  })
+
+  it("maps session.summarize onto ctx.session.compact and drops the V1 model fields", async () => {
+    // given a host whose plugin session domain exposes compact (the 2.0.30 line)
+    const { source, calls } = createSource()
+    const client: V1ShimClient = createV1ClientShim(source)
+
+    // when the preemptive-compaction trigger asks for a summary with its resolved model
+    const result = await client.session.summarize({
+      path: { id: "ses_1" },
+      body: { providerID: "anthropic", modelID: "sonnet", auto: true },
+      query: { directory: "/work" },
+    })
+
+    // then compact is called with just the session id, and the compaction result comes back
+    expect(calls.compact).toEqual([{ sessionID: "ses_1" }])
+    expect(result.error).toBeUndefined()
+    expect(result.data).toMatchObject({ id: "compaction_1" })
+  })
+
+  it("rejects session.summarize when the host has no compact domain (2.0.11/2.0.15)", async () => {
+    // given a host without ctx.session.compact
+    const { source } = createSource({ compact: undefined })
+    const client: V1ShimClient = createV1ClientShim(source)
+
+    // when / then the call rejects, because the three call sites only see failures as exceptions
+    await expect(client.session.summarize({ path: { id: "ses_1" } })).rejects.toThrow(
+      "no compact method",
+    )
+  })
+
+  it("requires a session id for session.summarize", async () => {
+    const { source, calls } = createSource()
+    const client: V1ShimClient = createV1ClientShim(source)
+    await expect(client.session.summarize({})).rejects.toThrow("requires path.id")
+    expect(calls.compact).toEqual([])
+  })
+
+  it("propagates a compact rejection so the caller's catch reports it instead of pretending success", async () => {
+    const { source } = createSource({
+      compact: async () => {
+        throw new Error("compaction refused")
+      },
+    })
+    const client: V1ShimClient = createV1ClientShim(source)
+    await expect(client.session.summarize({ path: { id: "ses_1" } })).rejects.toThrow("compaction refused")
   })
 })
 
