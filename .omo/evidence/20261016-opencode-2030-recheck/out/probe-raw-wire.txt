@@ -1,0 +1,9 @@
+HOST_VERSION=opencode v2.0.30
+SESSION=ses_ebc430ae6ffeAPXWfm8tDwpxHe
+CREATE_RAW={"data":{"id":"ses_ebc430ae6ffeAPXWfm8tDwpxHe","projectID":"dab3629bb86e2f15d646b21dae003e6bd794a252","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"creat
+WIRE_EVENT_TYPES=2
+WIRE_HAS_SESSION_CREATED=yes
+WIRE_SESSION_EVENTS=session.created
+STREAM_BYTES=562
+STREAM=/home/user/omo-v2/.omo/tmp/event-catalog-2030/raw-sse.txt
+ISO=ISO_OK

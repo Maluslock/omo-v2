@@ -19,7 +19,8 @@ MODEL="${MODEL:-deepseek/deepseek-v4-pro}"
 PROMPT='Use omo_glob to list *.json in the current directory, then reply with exactly SMOKE_OK and the number of matches.'
 
 . "$REPO_ROOT/.agents/skills/opencode-qa/scripts/lib/common.sh"
-trap - EXIT
+# Do NOT clear the library's EXIT trap: oqa_cleanup kills leftover servers and
+# removes the sandbox. Clearing it leaks /tmp/oqa-xdg.* (19 dirs before this fix).
 
 unset XDG_DATA_HOME XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME OPENCODE_CONFIG_DIR
 
@@ -29,9 +30,9 @@ if ! oqa_require opencode sqlite3 python3 >/dev/null 2>&1; then
 fi
 
 REALDB="$(oqa_db_path)"
-BEFORE_COUNT=0
+BEFORE_COUNT=""
 if [ -n "$REALDB" ] && [ -f "$REALDB" ]; then
-  BEFORE_COUNT="$(sqlite3 "$REALDB" 'SELECT count(*) FROM session;' 2>/dev/null || printf '0')"
+  BEFORE_COUNT="$(sqlite3 "$REALDB" 'SELECT count(*) FROM session;' 2>/dev/null || printf '')"
 fi
 
 if ! oqa_mk_isolated_xdg; then
@@ -129,13 +130,24 @@ PY
 
 AFTER_COUNT="$BEFORE_COUNT"
 if [ -n "$REALDB" ] && [ -f "$REALDB" ]; then
-  AFTER_COUNT="$(sqlite3 "$REALDB" 'SELECT count(*) FROM session;' 2>/dev/null || printf '0')"
+  AFTER_COUNT="$(sqlite3 "$REALDB" 'SELECT count(*) FROM session;' 2>/dev/null || printf '')"
 fi
-if [ "$AFTER_COUNT" = "$BEFORE_COUNT" ]; then printf 'ISO=ISO_OK\n'; else printf 'ISO=ISO_LEAK\n'; fi
+# Print the raw counts too: a bare ISO_OK from 0/0 would be vacuous if sqlite failed.
+printf 'ISO_DB=%s\nISO_BEFORE=%s\nISO_AFTER=%s\n' "${REALDB:-none}" "${BEFORE_COUNT:-?}" "${AFTER_COUNT:-?}"
+if [ -z "$BEFORE_COUNT" ] || [ -z "$AFTER_COUNT" ]; then
+  printf 'ISO=ISO_UNKNOWN\n'
+elif [ "$AFTER_COUNT" = "$BEFORE_COUNT" ]; then
+  printf 'ISO=ISO_OK\n'
+else
+  printf 'ISO=ISO_LEAK\n'
+fi
 
 if [ ! -s "$RUN_OUT" ]; then
   printf 'RUN_STDOUT_EMPTY=1\n'
   printf 'RUN_ERR_TAIL=%s\n' "$(tail -5 "$RUN_ERR" 2>/dev/null | tr '\n' ' ' | cut -c1-400)"
 fi
 printf 'SANDBOX=%s\n' "$OQA_PROJ"
+# The sandbox DB is created by the host under test, so this line is the evidence
+# that omo's SQLite session backfill still reads a 2.0.30 schema.
+printf 'SESSION_INDEX_READY=%s\n' "$(grep -ac 'session index ready' "$WINDOW_FILE" 2>/dev/null | head -1)"
 printf 'LOG_WINDOW=%s\n' "$WINDOW_FILE"

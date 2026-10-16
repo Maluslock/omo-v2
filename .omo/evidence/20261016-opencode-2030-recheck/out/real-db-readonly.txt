@@ -1,0 +1,12 @@
+REAL_DB=/home/user/.local/share/opencode/opencode.db
+HOST_VERSION=opencode v2.0.30
+SESSION_TABLE_ROWS=297
+SESSION_V2_ROWS=380
+BACKFILL_QUERY_REQUIRES_SQLITE_V2=1
+BACKFILL_MAIN_ROWS=88
+BACKFILL_CHILD_ROWS=292
+BACKFILL_DROPPED_ROWS=0
+BACKFILL_SAMPLE=ses_f2de97f9dffepxbUphBrp62Dcy :: Find *.md files and reply OFFICIAL_BUILD_OK;ses_f2e95c203ffeyEpAfRWHGgS5hx :: Find *.md files and reply RUN_2;ses_f2e95e3e1ffe3NNGVNlxH9nPYG :: Markdown file pattern *.md search and reply RUN_1;
+MIGRATIONS_APPLIED=50
+MIGRATIONS_NEWEST=20261010180456_project_time_archived,20261007190000_azure_cli_external_credential,20260923013825_project_time_active
+ISO=ISO_READONLY

@@ -1,4 +1,4 @@
-MOCK_PORT=43801
+MOCK_PORT=37783
 HOST_VERSION=opencode v2.0.30
 RUN_RC=0
 BODY_COUNT=2
@@ -11,8 +11,13 @@ FIELD_maxOutputTokens=ABSENT
 FIELD_reasoningEffort=ABSENT
 FIELD_omoProbeSentinel=ABSENT
 OTHER_BODY_KEYS=["max_completion_tokens", "reasoning_effort", "store", "stream_options", "tools", "top_p"]
+WIRE_top_p=0.21 from_topP
+WIRE_max_completion_tokens=1234 from_maxTokens
+WIRE_reasoning_effort="low" from_reasoningEffort
+REQ_0 has_tools=False keys=["messages", "model", "store", "stream", "stream_options"]
+REQ_1 has_tools=True keys=["max_completion_tokens", "messages", "model", "reasoning_effort", "store", "stream", "stream_options", "temperature", "tools", "top_p"]
 MODEL_SEEN=mock-1 STREAM_SEEN=True
 FINAL_TEXT=MOCK_OK
 RUN_ERR_TAIL=
 ISO=ISO_OK
-SANDBOX=/tmp/oqa-xdg.CyigEo/proj
+SANDBOX=/tmp/oqa-xdg.ffPwWf/proj

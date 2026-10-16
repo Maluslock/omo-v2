@@ -1,0 +1,37 @@
+MOCK_PORT=36009
+DELAY_SECONDS=12
+MIDTURN_AFTER=10
+HOST_VERSION=opencode v2.0.30
+SERVE=ready
+PARENT_SESSION=ses_ebc43161effeke7dIJUwU1kUMU
+CHILD_SESSION=ses_ebc4315d4ffer5Kl8TaMpQa4Y1
+CHILD_PARENT_FIELD=ses_ebc43161effeke7dIJUwU1kUMU
+PROMPT_HTTP=200
+PROMPT_BODY={"data":{"id":"msg_143bceb34001niwVbMiEULqRlN","sessionID":"ses_ebc4315d4ffer5Kl8TaMpQa4Y1","time":{"created":1792137819189},"type":"user","payload":{"text":"Reply with exactly CHILD_OK"},"delivery":"
+CHILD_SUCCEEDED_WITHIN_DEADLINE=yes
+PROVIDER_REQUESTS=1
+CHILD_EVENT_TYPES=session.execution.started,session.execution.succeeded,session.inbox.delivered,session.inbox.enqueued,session.instructions.updated,session.step.ended,session.step.started,session.step.streamed,session.text.delta,session.text.ended,session.text.started,session.usage.updated
+CHILD_HAS_EXECUTION_STARTED=yes
+CHILD_HAS_EXECUTION_SUCCEEDED=yes
+PARENT_EVENT_TYPES=none
+OTHER_SESSION_IDS=none
+MIDTURN_EVENTS=4
+MIDTURN_CHILD_TYPES=session.execution.started,session.inbox.delivered,session.inbox.enqueued,session.instructions.updated
+MIDTURN_CHILD_STILL_WORKING=yes
+REPLAY_MIDTURN_BEGIN
+REPLAY_FILE=liveness-midturn.jsonl
+REPLAY_EVENTS=4
+REPLAY_STATUSES_AT_END=ses_ebc4315d4ffer5Kl8TaMpQa4Y1
+REPLAY_SESSION ses_ebc4315d4ffer5Kl8TaMpQa4Y1 busy_ever=yes cleared_by=none
+REPLAY_FULL_BEGIN
+REPLAY_FILE=liveness-dump.jsonl
+REPLAY_EVENTS=12
+REPLAY_STATUSES_AT_END=none
+REPLAY_SESSION ses_ebc4315d4ffer5Kl8TaMpQa4Y1 busy_ever=yes cleared_by=session.execution.succeeded
+ISO_DB=/home/user/.local/share/opencode/opencode.db
+ISO_BEFORE=297
+ISO_AFTER=297
+ISO=ISO_OK
+DUMP=/home/user/omo-v2/.omo/tmp/event-catalog-2030/liveness-dump.jsonl
+MIDTURN_DUMP=/home/user/omo-v2/.omo/tmp/event-catalog-2030/liveness-midturn.jsonl
+SANDBOX=/tmp/oqa-xdg.roVQCC/proj

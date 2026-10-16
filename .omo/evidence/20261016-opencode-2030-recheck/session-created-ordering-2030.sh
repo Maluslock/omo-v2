@@ -45,7 +45,9 @@ PY
 cp "$PROBE_SRC" "$OQA_PROJ/.opencode/plugins/zz-events-2030.ts"
 
 PORT="$(oqa_free_port)"; PASS="oqa-${RANDOM}${RANDOM}"
-(cd "$OQA_PROJ" && CATALOG_OUT="$DUMP" OPENCODE_SERVER_PASSWORD="$PASS" opencode serve --port "$PORT" --hostname 127.0.0.1 \
+# `exec` matters: without it $! is the subshell, so the kill below would leave
+# the real server orphaned (ppid 1) and holding its port.
+(cd "$OQA_PROJ" && exec env CATALOG_OUT="$DUMP" OPENCODE_SERVER_PASSWORD="$PASS" opencode serve --port "$PORT" --hostname 127.0.0.1 \
   >"$OQA_PROJ/serve.out" 2>"$OQA_PROJ/serve.err") &
 OQA_SERVER_PID=$!
 disown "$OQA_SERVER_PID" 2>/dev/null || true
@@ -73,19 +75,27 @@ wait_done() {
   return 1
 }
 
+# A and B are both created before the plugin is prompted even once, so this
+# distinguishes "only the very first session is missed" (A=no, B=yes) from
+# "every session created before the plugin's first prompt is missed"
+# (A=no, B=no), with C created after the first prompt as the control.
 SES_A="$(create_session "ordering A")"
+SES_B="$(create_session "ordering B")"
 printf 'SESSION_A=%s\n' "${SES_A:-CREATE_FAILED}"
+printf 'SESSION_B=%s\n' "${SES_B:-CREATE_FAILED}"
 prompt_session "$SES_A"
 wait_done 1 || printf 'WARN=session_A_never_finished\n'
-
-SES_B="$(create_session "ordering B")"
-printf 'SESSION_B=%s\n' "${SES_B:-CREATE_FAILED}"
 prompt_session "$SES_B"
 wait_done 2 || printf 'WARN=session_B_never_finished\n'
 
-python3 - "$DUMP" "$SES_A" "$SES_B" <<'PY'
+SES_C="$(create_session "ordering C")"
+printf 'SESSION_C=%s\n' "${SES_C:-CREATE_FAILED}"
+prompt_session "$SES_C"
+wait_done 3 || printf 'WARN=session_C_never_finished\n'
+
+python3 - "$DUMP" "$SES_A" "$SES_B" "$SES_C" <<'PY'
 import json, sys
-dump, a, b = sys.argv[1], sys.argv[2], sys.argv[3]
+dump, a, b, c = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 rows = []
 try:
     for line in open(dump, errors='replace'):
@@ -107,8 +117,13 @@ print('SESSION_CREATED_IDS=%s' % ','.join(x or '?' for x in created))
 print('EXECUTION_SUCCEEDED_IDS=%s' % ','.join(x or '?' for x in executed))
 print('CREATED_SAW_A=%s' % ('yes' if a in created else 'no'))
 print('CREATED_SAW_B=%s' % ('yes' if b in created else 'no'))
+print('CREATED_SAW_C=%s' % ('yes' if c in created else 'no'))
 print('SUCCEEDED_SAW_A=%s' % ('yes' if a in executed else 'no'))
 print('SUCCEEDED_SAW_B=%s' % ('yes' if b in executed else 'no'))
+print('SUCCEEDED_SAW_C=%s' % ('yes' if c in executed else 'no'))
+print('WINDOW=%s' % ('first_session_only' if (a not in created and b in created)
+                     else 'pre_first_prompt_window' if (a not in created and b not in created)
+                     else 'everything_seen'))
 PY
 
 cp "$OQA_PROJ/serve.err" "$OUTDIR/serve-ordering.err" 2>/dev/null || true

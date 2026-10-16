@@ -8,11 +8,13 @@
 # mirror heartbeat that the plugin writes every ~2s while the TUI runs.
 #
 # Assertions:
-#   PANEL_RENDERED      the TUI painted a known marker under tmux
-#   MIRROR_JSON_FILES   snapshots written under $XDG_DATA_HOME/.../tui-state
-#   MIRROR_HAS_FIELDS   a snapshot carries the activeAgents/jobBoard shape
-#   LOG_TUI_LINES       plugin log lines mentioning the tui/sidebar path
-#   ISO                 the real DB the sandbox did not touch
+#   PANEL_RENDERED          the TUI painted a known marker under tmux
+#   MIRROR_JSON_FILES       snapshots written under $XDG_DATA_HOME/.../tui-state
+#   MIRROR_HAS_FIELDS       a snapshot carries all six mirror fields
+#   REG_*                   the omo registration lines for this sandbox run
+#   GLOBAL_SERVICE_UNTOUCHED `opencode service set port` stayed inside the sandbox
+#   LOG_TUI_LINES           plugin log lines mentioning the tui/sidebar path
+#   ISO                     the real DB the sandbox did not touch
 #
 # Usage: bash .omo/evidence/20261016-opencode-2030-recheck/tui-slot-2030.sh
 set -uo pipefail
@@ -30,6 +32,16 @@ oqa_require opencode tmux jq sqlite3 >/dev/null 2>&1 || { printf 'ERROR=missing_
 REALDB="$(oqa_db_path)"
 BEFORE_COUNT=0
 [ -n "$REALDB" ] && [ -f "$REALDB" ] && BEFORE_COUNT="$(sqlite3 "$REALDB" 'SELECT count(*) FROM session;' 2>/dev/null || printf '0')"
+
+# Absolute, captured BEFORE the sandbox repoints $HOME: the user's live managed
+# service state. `opencode service set port` must not disturb it.
+GLOBAL_SERVICE_FILE="/home/user/.local/state/opencode/service.json"
+GLOBAL_SERVICE_BEFORE="$(python3 -c 'import json,sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print("%s pid=%s" % (d.get("url", "?"), d.get("pid", "?")))
+except Exception:
+    print("absent")' "$GLOBAL_SERVICE_FILE" 2>/dev/null)"
 
 mkdir -p "$OUTDIR"; rm -rf "$OUTDIR"; mkdir -p "$OUTDIR"
 oqa_mk_isolated_xdg || { printf 'ERROR=isolated_xdg_failed\n'; exit 1; }
@@ -54,10 +66,31 @@ printf 'HOST_VERSION=%s\n' "${VER_RAW:-unknown}"
 # already hold. Give the sandbox its own port so the probe tests the plugin
 # rather than the port collision.
 FREE_PORT="$(oqa_free_port)"
+# Sandbox-scoped: oqa_mk_isolated_xdg repointed XDG_CONFIG_HOME, and `opencode
+# service set port` writes {"port": N} to $XDG_CONFIG_HOME/opencode/service.json
+# (verified: the isolated run leaves no service.json anywhere else and the user's
+# live service file is untouched), so this cannot disturb the user's service.
 if opencode service set port "$FREE_PORT" >/dev/null 2>&1; then
   printf 'SANDBOX_SERVICE_PORT=%s\n' "$FREE_PORT"
 else
   printf 'SANDBOX_SERVICE_PORT=unset\n'
+fi
+printf 'SANDBOX_SERVICE_STATE=%s\n' "$(python3 -c 'import json,sys
+try:
+    print(json.load(open(sys.argv[1])).get("port", "none"))
+except Exception:
+    print("none")' "$XDG_CONFIG_HOME/opencode/service.json" 2>/dev/null)"
+GLOBAL_SERVICE_AFTER="$(python3 -c 'import json,sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print("%s pid=%s" % (d.get("url", "?"), d.get("pid", "?")))
+except Exception:
+    print("absent")' "$GLOBAL_SERVICE_FILE" 2>/dev/null)"
+printf 'GLOBAL_SERVICE_BEFORE=%s\nGLOBAL_SERVICE_AFTER=%s\n' "$GLOBAL_SERVICE_BEFORE" "$GLOBAL_SERVICE_AFTER"
+if [ "$GLOBAL_SERVICE_BEFORE" = "$GLOBAL_SERVICE_AFTER" ]; then
+  printf 'GLOBAL_SERVICE_UNTOUCHED=yes\n'
+else
+  printf 'GLOBAL_SERVICE_UNTOUCHED=no\n'
 fi
 
 SESS="oqa_tui_slot_${$}_${RANDOM}"
@@ -70,7 +103,7 @@ tmux send-keys -t "$SESS" \
 RENDERED=no
 for ((i=0; i<80; i++)); do
   cap="$(tmux capture-pane -t "$SESS" -p 2>/dev/null)"
-  if printf '%s' "$cap" | grep -Fq "${VER_RAW:-opencode v}" || printf '%s' "$cap" | grep -Eq "Ask anything|ctrl\+p|agents|Sisyphus"; then RENDERED=yes; break; fi
+  if printf '%s' "$cap" | grep -Fq "${VER_RAW:-opencode v}" || printf '%s' "$cap" | grep -Eq "Ask anything|ctrl\+p|Sisyphus|MCP"; then RENDERED=yes; break; fi
   sleep 0.5
 done
 printf 'PANEL_RENDERED=%s\n' "$RENDERED"
@@ -89,7 +122,9 @@ printf 'MIRROR_JSON_FILES=%s\n' "$MIRROR_FILES"
 if [ "$MIRROR_FILES" -gt 0 ]; then
   SAMPLE="$(find "$MIRROR_DIR" -name '*.json' 2>/dev/null | head -1)"
   cp "$SAMPLE" "$OUTDIR/mirror-sample.json" 2>/dev/null || true
-  if python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));sys.exit(0 if ("activeAgents" in d and "jobBoard" in d) else 1)' "$SAMPLE" 2>/dev/null; then
+  MIRROR_KEYS="$(python3 -c 'import json,sys;print(",".join(sorted(json.load(open(sys.argv[1])))))' "$SAMPLE" 2>/dev/null)"
+  printf 'MIRROR_KEYS=%s\n' "${MIRROR_KEYS:-none}"
+  if python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));need=["activeAgents","jobBoard","loop","projectDir","updatedAt","version"];sys.exit(0 if all(k in d for k in need) else 1)' "$SAMPLE" 2>/dev/null; then
     printf 'MIRROR_HAS_FIELDS=yes\n'
   else
     printf 'MIRROR_HAS_FIELDS=no\n'
@@ -109,12 +144,29 @@ printf 'PLUGIN_LOG_DELTA=%s\n' "$(( ${AFTER_PLUGIN_LINES:-0} - ${BEFORE_PLUGIN_L
 printf 'LOG_TUI_LINES=%s\n' "$(tail -n "$(( ${AFTER_PLUGIN_LINES:-0} - ${BEFORE_PLUGIN_LINES:-0} + 1 ))" "$PLUGIN_LOG" 2>/dev/null | grep -acE "tui-sidebar|sidebar" | head -1)"
 tail -n "$(( ${AFTER_PLUGIN_LINES:-0} - ${BEFORE_PLUGIN_LINES:-0} + 1 ))" "$PLUGIN_LOG" 2>/dev/null > "$OUTDIR/plugin-log-window.txt"
 printf 'LOG_V2_ANY=%s\n' "$(grep -acE "\[v2\]" "$OUTDIR/plugin-log-window.txt" 2>/dev/null | head -1)"
+# The "same registration scan as the standalone run" claim must come from parsed
+# lines, not from a human squinting at the log window.
+for pair in "agents registered:REG_AGENTS" "tools registered:REG_TOOLS" \
+            "hooks registered:REG_HOOKS" "mcps registered:REG_MCPS" \
+            "commands registered:REG_COMMANDS" "skills registered:REG_SKILLS"; do
+  needle="${pair%%:*}"; label="${pair##*:}"
+  printf '%s=%s\n' "$label" "$(grep -a "$needle" "$OUTDIR/plugin-log-window.txt" 2>/dev/null | tail -1 | sed 's/^[^{]*//' | cut -c1-160)"
+done
 
 tmux kill-session -t "$SESS" 2>/dev/null || true
 sleep 0.5
 tmux has-session -t "$SESS" 2>/dev/null && printf 'TMUX_TEARDOWN=failed\n' || printf 'TMUX_TEARDOWN=ok\n'
 
 AFTER_COUNT="$BEFORE_COUNT"
-[ -n "$REALDB" ] && [ -f "$REALDB" ] && AFTER_COUNT="$(sqlite3 "$REALDB" 'SELECT count(*) FROM session;' 2>/dev/null || printf '0')"
-[ "$AFTER_COUNT" = "$BEFORE_COUNT" ] && printf 'ISO=ISO_OK\n' || printf 'ISO=ISO_LEAK\n'
+if [ -n "$REALDB" ] && [ -f "$REALDB" ]; then
+  AFTER_COUNT="$(sqlite3 "$REALDB" 'SELECT count(*) FROM session;' 2>/dev/null || printf '')"
+fi
+printf 'ISO_DB=%s\nISO_BEFORE=%s\nISO_AFTER=%s\n' "${REALDB:-none}" "${BEFORE_COUNT:-?}" "${AFTER_COUNT:-?}"
+if [ -z "$BEFORE_COUNT" ] || [ -z "$AFTER_COUNT" ]; then
+  printf 'ISO=ISO_UNKNOWN\n'
+elif [ "$AFTER_COUNT" = "$BEFORE_COUNT" ]; then
+  printf 'ISO=ISO_OK\n'
+else
+  printf 'ISO=ISO_LEAK\n'
+fi
 printf 'ARTIFACTS=%s\n' "$OUTDIR"

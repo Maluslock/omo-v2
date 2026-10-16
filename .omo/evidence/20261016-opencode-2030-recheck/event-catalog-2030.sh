@@ -19,10 +19,17 @@ MODEL="${MODEL:-deepseek/deepseek-v4-pro}"
 REAL_CONFIG="${REAL_CONFIG:-/home/user/.config/opencode/opencode.json}"
 
 . "$REPO_ROOT/.agents/skills/opencode-qa/scripts/lib/common.sh"
-trap - EXIT
+# Do NOT clear the library's EXIT trap: oqa_cleanup kills leftover servers and
+# removes the sandbox.
 
 unset XDG_DATA_HOME XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME OPENCODE_CONFIG_DIR
 oqa_require opencode sqlite3 python3 >/dev/null 2>&1 || { printf 'ERROR=missing_dependency\n'; exit 1; }
+
+REALDB="$(oqa_db_path)"
+BEFORE_COUNT=""
+if [ -n "$REALDB" ] && [ -f "$REALDB" ]; then
+  BEFORE_COUNT="$(sqlite3 "$REALDB" 'SELECT count(*) FROM session;' 2>/dev/null || printf '')"
+fi
 
 mkdir -p "$(dirname "$DUMP")"
 rm -f "$DUMP"
@@ -105,6 +112,19 @@ if baseline:
     print('NEW_VS_BASELINE=%s' % (','.join(added) if added else 'none'))
 print('PROBE_ERRORS=%s' % (';'.join(errs) if errs else 'none'))
 PY
+
+AFTER_COUNT="$BEFORE_COUNT"
+if [ -n "$REALDB" ] && [ -f "$REALDB" ]; then
+  AFTER_COUNT="$(sqlite3 "$REALDB" 'SELECT count(*) FROM session;' 2>/dev/null || printf '')"
+fi
+printf 'ISO_DB=%s\nISO_BEFORE=%s\nISO_AFTER=%s\n' "${REALDB:-none}" "${BEFORE_COUNT:-?}" "${AFTER_COUNT:-?}"
+if [ -z "$BEFORE_COUNT" ] || [ -z "$AFTER_COUNT" ]; then
+  printf 'ISO=ISO_UNKNOWN\n'
+elif [ "$AFTER_COUNT" = "$BEFORE_COUNT" ]; then
+  printf 'ISO=ISO_OK\n'
+else
+  printf 'ISO=ISO_LEAK\n'
+fi
 
 printf 'DUMP=%s\n' "$DUMP"
 printf 'SANDBOX=%s\n' "$OQA_PROJ"

@@ -20,7 +20,8 @@ PROMPT='Reply with the single word MOCK_OK and nothing else.'
 MODEL="mock/mock-1"
 
 . "$REPO_ROOT/.agents/skills/opencode-qa/scripts/lib/common.sh"
-trap - EXIT
+# Do NOT clear the library's EXIT trap: oqa_cleanup kills leftover servers and
+# removes the sandbox.
 
 unset XDG_DATA_HOME XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME OPENCODE_CONFIG_DIR
 
@@ -148,6 +149,14 @@ else:
                                       "topP", "topK", "maxTokens", "maxOutputTokens",
                                       "reasoningEffort", "omoProbeSentinel"})
     print("OTHER_BODY_KEYS=%s" % json.dumps(extra))
+    # The provider package renames several V2 keys on the wire, so print the wire
+    # values as well: the capture alone must support the documented mapping.
+    for wire, v2 in (("top_p", "topP"), ("max_completion_tokens", "maxTokens"),
+                     ("reasoning_effort", "reasoningEffort")):
+        vals = [b[wire] for b in bodies if wire in b]
+        print("WIRE_%s=%s from_%s" % (wire, json.dumps(vals[0]) if vals else "ABSENT", v2))
+    for i, body in enumerate(bodies):
+        print("REQ_%d has_tools=%s keys=%s" % (i, "tools" in body, json.dumps(sorted(body))))
     print("MODEL_SEEN=%s STREAM_SEEN=%s" % (bodies[-1].get("model"), bodies[-1].get("stream")))
 PY
 

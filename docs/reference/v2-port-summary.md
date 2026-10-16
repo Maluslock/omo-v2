@@ -159,16 +159,31 @@ Re-run these probes when the host version changes:
 | a turn that overflows the context limit | compaction events and whether the turn resumes |
 | `tui.json`/`cli.json` plus a tmux TUI | which client config the host reads and whether the CLI plugin loads |
 
-Last re-run: `opencode` **2.0.30** (2026-10-16). Probes 1, 2, 3, 5 and 6 pass unchanged. Probe 3 saw
-`temperature` forwarded as-is and `topP`/`maxTokens`/`reasoningEffort` renamed to
-`top_p`/`max_completion_tokens`/`reasoning_effort` on the wire, with `topK` and unknown keys dropped.
-Probe 5 saw overflow trigger a summary compaction, all three `session.compaction.*` events fire, the
-turn resume, and the compaction hook's `event.system` addition reach the summary request - the channel
-`compaction-hook-mapping.ts` writes to. Probe 4 is covered by the events probe 2 observes; a long-lived
-subagent was not driven to completion. The write-up, the observed API changes (`/api` route prefix, the
-`{"text"}` prompt body, the deferred `session.created` delivery), the in-place host upgrade plus the
-managed-service restart and its three database migrations, and the residual risk list are in
-`../../.omo/evidence/20261016-opencode-2030-recheck/README.md`.
+Last re-run: `opencode` **2.0.30** (2026-10-16). All six probes pass; probe 4 was the one that had only
+been inferred from probe 2, and it now has its own script.
+
+- Probes 1 (registration plus one tool round), 2 (event vocabulary) and 6 (TUI slot and sidebar mirror)
+  reproduce the 2.0.11 results. `session.execution.started`/`succeeded` still arrive, so the `session.idle`
+  translation stays load-bearing; `session.idle` and `session.status` are still never emitted.
+- Probe 3 saw `temperature` forwarded as-is and `topP`/`maxTokens`/`reasoningEffort` renamed to
+  `top_p`/`max_completion_tokens`/`reasoning_effort` on the wire, with `topK` and unknown keys dropped.
+- Probe 5 saw overflow trigger a summary compaction, all three `session.compaction.*` events fire, the
+  turn resume, and the compaction hook's `event.system` addition reach the summary request - the channel
+  `compaction-hook-mapping.ts` writes to. Pointing the mock at an off-template summary produced
+  `session.compaction.failed` and failed the turn, which is what a bad summary does to a live session.
+- Probe 4: a second session with `parentID` set, prompted while the provider held its reply for 12s,
+  still reached the plugin bus as `session.execution.started` then `session.execution.succeeded` keyed by
+  its own id (the parent session saw no events at all). Replaying that capture through
+  `packages/omo-opencode/src/v2/session-activity.ts` yields `{child: busy}` mid-turn and `{}` afterwards,
+  so the map that stops the background manager from treating a live subagent as gone rebuilds correctly
+  on 2.0.30. No model was asked to *choose* to delegate; the probe drives the child session directly.
+- One delivery boundary did move: `session.created` only reaches plugins after the plugin's first prompt,
+  so every session created before that window is missed (`WINDOW=pre_first_prompt_window`). The raw wire
+  still carries the event, so this is subscription ordering rather than a dropped name.
+
+The write-up, the observed API changes (`/api` route prefix, the `{"text"}` prompt body), the in-place
+host upgrade plus the managed-service restart and its three database migrations, and the residual risk
+list are in `../../.omo/evidence/20261016-opencode-2030-recheck/README.md`.
 
 ## 9. Evidence index
 
@@ -193,8 +208,13 @@ All under `../../.omo/evidence/20260923-v2-alignment/` (force-added because `.om
 | `p6-real-config-smoke.md`, `p6-c1-local-build.md` | Real-config smoke and the supported build recipe |
 
 The 2.0.30 re-verification lives in its own directory,
-`../../.omo/evidence/20261016-opencode-2030-recheck/` (also force-added): `README.md`, the eight probe
-scripts (`recheck-host.sh`, `event-catalog-2030.sh`, `serve-event-catalog-2030.sh`,
-`raw-event-stream-2030.sh`, `session-created-ordering-2030.sh`, `gen-options-2030.sh`,
-`compaction-2030.sh`, `tui-slot-2030.sh`), their `out/` captures, and the fake provider
-`mock-provider.py` the last two drive.
+`../../.omo/evidence/20261016-opencode-2030-recheck/` (also force-added): `README.md`; the probe scripts
+(`recheck-host.sh`, `event-catalog-2030.sh`, `serve-event-catalog-2030.sh`, `raw-event-stream-2030.sh`,
+`session-created-ordering-2030.sh`, `subagent-liveness-2030.sh`, `gen-options-2030.sh`,
+`compaction-2030.sh`, `tui-slot-2030.sh`); the replay helper `session-activity-replay.ts` that feeds a
+capture through the real `v2/session-activity.ts` tracker; the static `schema-diff-2030.sh` and the
+read-only `real-db-readonly-2030.sh`, which runs the plugin's backfill query shape against the migrated
+real database; the event probe plugin `event-catalog-probe-2030.ts`; the fake provider
+`mock-provider.py`; `run-recheck-all.sh`, which runs the probes in the four groups the shared plugin log
+forces and then the two static checks, and sweeps the sandboxes its own run created; and every raw
+capture under `out/`.

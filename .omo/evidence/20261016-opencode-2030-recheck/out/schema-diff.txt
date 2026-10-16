@@ -1,0 +1,19 @@
+BASELINE=/home/user/omo-v2/.omo/evidence/20260923-v2-alignment/research/pkgs/x_opencode_schema2.0.15/package/dist/session-event.d.ts
+NEW=/home/user/omo-v2/.omo/tmp/schema-2.0.30/package/dist/session-event.d.ts
+SCHEMA_VERSION=2.0.30
+BASELINE_SESSION_EVENTS=51
+NEW_SESSION_EVENTS=51
+REMOVED_IN_NEW=none
+ADDED_IN_NEW=none
+HAS session.created                baseline=True  new=True
+HAS session.idle                   baseline=False new=False
+HAS session.status                 baseline=False new=False
+HAS session.compacted              baseline=False new=False
+HAS session.error                  baseline=False new=False
+HAS session.execution.started      baseline=True  new=True
+HAS session.execution.succeeded    baseline=True  new=True
+HAS session.compaction.ended       baseline=True  new=True
+SESSION_CREATED_DECLARATION_IDENTICAL=yes
+SESSION_CREATED_DECLARATION=readonly type: Schema.Literal<"session.created">;
+SESSION_EXECUTION_STARTED_DECLARATION_IDENTICAL=yes
+SESSION_COMPACTION_ENDED_DECLARATION_IDENTICAL=yes

@@ -21,7 +21,8 @@ CONTEXT_LIMIT=4000
 REPORTED_PROMPT_TOKENS=100000
 
 . "$REPO_ROOT/.agents/skills/opencode-qa/scripts/lib/common.sh"
-trap - EXIT
+# Do NOT clear the library's EXIT trap: oqa_cleanup kills leftover servers and
+# removes the sandbox.
 
 unset XDG_DATA_HOME XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME OPENCODE_CONFIG_DIR
 
@@ -50,6 +51,11 @@ BODIES="$OQA_PROJ/mock-bodies.jsonl"
 # The host validates the compaction summary against a fixed template and fails
 # the turn when it does not match, so hand the summarisation request a
 # conforming answer (section headings copied from the host's own prompt).
+# Set BAD_SUMMARY=1 to hand it a non-conforming answer instead: that demonstrates
+# the template gate (session.compaction.failed) rather than only asserting it.
+if [ -n "${BAD_SUMMARY:-}" ]; then
+  printf 'This is not the required summary template.\n' >"$OQA_PROJ/summary.md"
+else
 cat >"$OQA_PROJ/summary.md" <<'MD'
 ## Objective
 - Exercise the host's automatic compaction path for the 2.0.30 recheck.
@@ -77,6 +83,7 @@ cat >"$OQA_PROJ/summary.md" <<'MD'
 ## Important Context
 - (none)
 MD
+fi
 python3 "$MOCK_PY" --port "$PORT" --log "$BODIES" --reply "MOCK_REPLY" \
   --summary-file "$OQA_PROJ/summary.md" \
   --prompt-tokens "$REPORTED_PROMPT_TOKENS" --completion-tokens 10 \
@@ -87,6 +94,7 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 printf 'MOCK_PORT=%s\n' "$PORT"
+printf 'BAD_SUMMARY=%s\n' "${BAD_SUMMARY:-no}"
 
 python3 - "$OPENCODE_CONFIG_DIR/opencode.json" "$PORT" "$CONTEXT_LIMIT" <<'PY'
 import json, sys

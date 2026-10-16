@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""OpenAI-compatible mock provider for the 2.0.30 recheck probes (#3 and #5).
+"""OpenAI-compatible mock provider for the 2.0.30 recheck probes (#3, #4 and #5).
 
-Two jobs:
+Three jobs:
   * record every outbound request body, so probe #3 can read which generation
     fields a plugin's `context` hook actually got forwarded to the wire;
   * answer with a controllable reply and usage numbers, so probe #5 can push the
-    host past the model's context limit without spending real tokens.
+    host past the model's context limit without spending real tokens;
+  * answer slowly on request, so probe #4 can watch a second session stay busy
+    for longer than the background manager's ~9s "session gone" window.
 
 Only the endpoints an `aisdk:@ai-sdk/openai-compatible` provider calls are
 implemented: GET /v1/models, POST /v1/chat/completions (JSON and SSE).
@@ -13,6 +15,7 @@ implemented: GET /v1/models, POST /v1/chat/completions (JSON and SSE).
 Usage:
   mock-provider.py --port 8123 --log /tmp/bodies.jsonl [--reply TEXT]
                    [--prompt-tokens N] [--completion-tokens N]
+                   [--delay-seconds S]
 """
 import argparse
 import json
@@ -69,6 +72,11 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length).decode("utf-8", "replace")
         self._record(raw)
+        if ARGS.delay_seconds:
+            # A slow reply keeps a turn in flight, so a probe can watch the host
+            # keep reporting that session as busy for longer than the background
+            # manager's ~9s "session gone" window (see v2/session-activity.ts).
+            time.sleep(ARGS.delay_seconds)
         try:
             body = json.loads(raw)
         except Exception:
@@ -171,6 +179,8 @@ def main():
     # -1 means "estimate from the request messages".
     parser.add_argument("--prompt-tokens", type=int, default=-1)
     parser.add_argument("--completion-tokens", type=int, default=4)
+    # Applies to every completion; 0 keeps the fast probes (#3, #5) instant.
+    parser.add_argument("--delay-seconds", type=float, default=0.0)
     ARGS = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", ARGS.port), Handler)
     print("MOCK_READY port=%d log=%s" % (ARGS.port, ARGS.log), flush=True)

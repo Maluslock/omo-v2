@@ -1,0 +1,31 @@
+MOCK_PORT=49381
+BAD_SUMMARY=1
+TURN_ONE_RC=1
+TURN_ONE_EVENT_TYPES=["error"]
+TURN_ONE_FINAL_TEXT=MISSING
+TURN_TWO_RC=1
+TURN_TWO_EVENT_TYPES=["error"]
+TURN_TWO_FINAL_TEXT=MISSING
+HOST_VERSION=opencode v2.0.30
+SESSION_ID=ses_probe_compaction_1792137814
+EVENTS_TOTAL=47
+COMPACTION_EVENT_TYPES=["session.compaction.delta", "session.compaction.failed", "session.compaction.started"]
+HAS_session_compaction_started=yes
+HAS_session_compaction_ended=no
+HAS_session_compaction_failed=yes
+HAS_session_compacted=no
+ALL_EVENT_TYPES=["agent.updated", "command.updated", "integration.updated", "location.shutdown", "model.updated", "plugin.updated", "provider.updated", "reference.updated", "session.compaction.delta", "session.compaction.failed", "session.compaction.started", "session.execution.failed", "session.execution.started", "session.inbox.delivered", "session.inbox.enqueued", "session.instructions.updated", "session.renamed", "session.usage.updated", "skill.updated", "websearch.updated"]
+PROVIDER_REQUESTS=5
+REQ_0 messages=2 has_tools=False looks_like_summary=yes has_bridge_sentinel=no
+REQ_1 messages=3 has_tools=True looks_like_summary=yes has_bridge_sentinel=yes
+REQ_2 messages=4 has_tools=True looks_like_summary=yes has_bridge_sentinel=yes
+REQ_3 messages=3 has_tools=True looks_like_summary=yes has_bridge_sentinel=yes
+REQ_4 messages=4 has_tools=True looks_like_summary=yes has_bridge_sentinel=yes
+SENTINEL_REQUESTS=4
+COMPACTION_HOOK_CALLS=2
+COMPACTION_HOOK_FIRST={"called": true, "sessionID": "ses_probe_compaction_1792137814", "systemIsArray": true, "messagesIsArray": true, "optionsIsRecord": true, "hasResult": false}
+COMPACTION_HOOK_ERRORS=[]
+LOG_V2_COMPACTION=0
+LOG_V2_LINES=0
+ISO=ISO_OK
+SANDBOX=/tmp/oqa-xdg.0vHRi4/proj

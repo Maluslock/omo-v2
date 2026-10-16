@@ -134,7 +134,7 @@ live under `../../.omo/evidence/20260923-v2-alignment/` and
 | `ToolContext` has no `ask`, and `permission.hook("evaluate")` cannot create a request | Permission-gated code must answer the ask itself and fail closed | `p5-a3-permission-assessment.md`, `p6-b3-monitor.md` |
 | `ctx.storage` is a plugin-namespaced KV that survives restarts | The session index persists | `live-v2-storage-events.md` |
 | The host context is a Bun single-file executable | `bun:sqlite` is available, but only through a `bun-*-shim.ts` | `p6-b9-session-backfill.md` |
-| A TUI plugin must be `Plugin.define({id, setup})`; the shipped `dist/tui.js` is still V1-shaped | The sidebar cannot load on 2.0.11 | `p6-b11-tui-plugin-v1-shape.md` |
+| A 2.x TUI plugin must be `Plugin.define({id, setup})`, which the 1.x `{id, tui(api)}` shape is not | One module has to export both generations and pick per host, so the TUI build needs a dual-shape export | `p6-b11-tui-plugin-v1-shape.md`, `p6-b12-tui-plugin-port.md`; re-verified on 2.0.30 by probe 6 |
 
 ## 5. Recipes
 
@@ -217,8 +217,9 @@ and export `{ id, tui(api) }`. On 2.x the terminal client owns one global config
 there under `plugins` (a package name, a local path, a file URL, or `{ package, options }`; a leading
 `-` disables), and the module must be `Plugin.define({ id, setup(context) })` imported from
 `@opencode/plugin/tui`, which the host resolves at runtime, so a local CLI plugin needs no absolute
-path. The shipped `dist/tui.js` is still V1-shaped, which is why 2.0.11 reports
-`Invalid V2 TUI plugin module`. 2.x has no project-local client config, and when `cli.json` is absent
+path. The shipped `dist/tui.js` used to be V1-shaped only, which is why 2.0.11 reported
+`Invalid V2 TUI plugin module`; `2d5ef10` made it export both generations and pick per host
+(`p6-b12-tui-plugin-port.md`). 2.x has no project-local client config, and when `cli.json` is absent
 the first 2.x client start migrates supported global `tui.json` settings. Slot `render` functions
 return JSX, and `sidebar.content` is one of the available slots.
 

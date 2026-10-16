@@ -1,0 +1,17 @@
+HOST_VERSION=opencode v2.0.30
+SESSION_A=ses_ebc431817ffelIZ2IL7kyV4ZzM
+SESSION_B=ses_ebc4317f2ffe25xUEok3cLa8Hg
+SESSION_C=ses_ebc42fbacffeZEiju3xdWNdVBU
+EVENTS_TOTAL=80
+SESSION_CREATED_COUNT=1
+SESSION_CREATED_IDS=ses_ebc42fbacffeZEiju3xdWNdVBU
+EXECUTION_SUCCEEDED_IDS=ses_ebc431817ffelIZ2IL7kyV4ZzM,ses_ebc4317f2ffe25xUEok3cLa8Hg,ses_ebc42fbacffeZEiju3xdWNdVBU
+CREATED_SAW_A=no
+CREATED_SAW_B=no
+CREATED_SAW_C=yes
+SUCCEEDED_SAW_A=yes
+SUCCEEDED_SAW_B=yes
+SUCCEEDED_SAW_C=yes
+WINDOW=pre_first_prompt_window
+DUMP=/home/user/omo-v2/.omo/tmp/event-catalog-2030/ordering-dump.jsonl
+ISO=ISO_OK

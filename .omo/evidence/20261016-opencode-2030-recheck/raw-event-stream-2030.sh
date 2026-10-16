@@ -40,7 +40,9 @@ json.dump(cfg, open(sys.argv[2], 'w'), indent=2)
 PY
 
 PORT="$(oqa_free_port)"; PASS="oqa-${RANDOM}${RANDOM}"
-(cd "$OQA_PROJ" && OPENCODE_SERVER_PASSWORD="$PASS" opencode serve --port "$PORT" --hostname 127.0.0.1 \
+# `exec` matters: without it $! is the subshell, so the kill below would leave
+# the real server orphaned (ppid 1) and holding its port.
+(cd "$OQA_PROJ" && exec env OPENCODE_SERVER_PASSWORD="$PASS" opencode serve --port "$PORT" --hostname 127.0.0.1 \
   >"$OQA_PROJ/serve.out" 2>"$OQA_PROJ/serve.err") &
 OQA_SERVER_PID=$!
 disown "$OQA_SERVER_PID" 2>/dev/null || true
