@@ -145,7 +145,7 @@ The V2 subset alone - `bun test packages/omo-opencode/src/v2/` - is 282 pass / 0
 | Category `max_tokens`, config docs | `bc769b6`, `48cee04` |
 | Session enumeration backfill | `ca7fa33` |
 | `reasoningEffort` resolution, TUI shape finding | `9f450e2` |
-| 2.0.30 re-verification, and the parity gaps it exposed | `2201e6348`, `f73a145d5` (probe table), `73b18b061` (client shim), `c77056cc6` (`message.updated` synthesis), `c9c87efbe` (`session.created`), and the part-event synthesis (`hook-mapping.ts`) |
+| 2.0.30 re-verification, and the parity gaps it exposed | `2201e6348`, `f73a145d5` (probe table), `73b18b061` (client shim), `c77056cc6` (`message.updated` synthesis), `c9c87efbe` (`session.created`), `1bab2c735` (part-event synthesis), `848c3db92` (the V1 body's `system`/`tools`) |
 
 ## 7. Open items
 

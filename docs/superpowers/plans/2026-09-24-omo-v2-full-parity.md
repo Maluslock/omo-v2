@@ -117,7 +117,18 @@ service -> evidence under `.omo/evidence/20260923-v2-alignment/` -> commit.
      todo enforcer, session notifications, the Anthropic recovery hook - were dormant. It is now
      rebuilt from `session.step.started` + `session.step.ended` by a stateful mapper
      (`createV1EventMapper` in `v2/hook-mapping.ts`), which is what makes the event carry
-     `providerID`/`modelID`/`agent` alongside `finish`/`tokens`. `message.part.updated` remains open.
+     `providerID`/`modelID`/`agent` alongside `finish`/`tokens`.
+   - **`message.part.updated` / `message.part.delta` / `session.stop`** - rebuilt from
+     `session.text.*` / `session.reasoning.*` / `session.tool.*` /
+     `session.message.content.updated` / `session.execution.interrupted`, with a derived part id.
+     Verdicts 6 in the evidence README. (`message.removed` / `message.part.removed` stay unmapped on
+     purpose: no V2 event names the removed messages.)
+   - **`session.created` for a session that predates the subscription** - project plugins load
+     lazily, so a session created before a host's first prompt is on no subscriber's stream; the
+     subscription now announces it on that session's first other event, once, ahead of that event.
+   - **V1 `system` / `tools` on a create/prompt body** - V2 request forms carry neither, so the shim
+     records them per session (`v2/session-prompt-config.ts`) and the `context` hook replays them
+     (session-scoped, unlike V1's message scope; deletions only, via the action table).
    - **`session.summarize`** now maps onto `ctx.session.compact` (and rejects instead of returning
      `{error}`, which no call site inspects); **`session.create`** forwards `parentID`; tools receive
      the host's own `context.signal` instead of a never-aborting fabricated one.
