@@ -1,13 +1,13 @@
-MOCK_PORT=59661
+MOCK_PORT=46063
 DELAY_SECONDS=12
 MIDTURN_AFTER=10
 HOST_VERSION=opencode v2.0.30
 SERVE=ready
-PARENT_SESSION=ses_ebc2cc161ffeMq904lmN1B6yKy
-CHILD_SESSION=ses_ebc2cc116ffe7Oz3vMRwKaapOa
-CHILD_PARENT_FIELD=ses_ebc2cc161ffeMq904lmN1B6yKy
+PARENT_SESSION=ses_ebc085816ffec8C4L46WnqRLgP
+CHILD_SESSION=ses_ebc0857e8ffe0ghIbzrEv6Mvle
+CHILD_PARENT_FIELD=ses_ebc085816ffec8C4L46WnqRLgP
 PROMPT_HTTP=200
-PROMPT_BODY={"data":{"id":"msg_143d3406a0013VmToSlFBO7685","sessionID":"ses_ebc2cc116ffe7Oz3vMRwKaapOa","time":{"created":1792139283058},"type":"user","payload":{"text":"Reply with exactly CHILD_OK"},"delivery":"
+PROMPT_BODY={"data":{"id":"msg_143f7a89f001vuciJmZ8ymmm3B","sessionID":"ses_ebc0857e8ffe0ghIbzrEv6Mvle","time":{"created":1792141667076},"type":"user","payload":{"text":"Reply with exactly CHILD_OK"},"delivery":"
 CHILD_SUCCEEDED_WITHIN_DEADLINE=yes
 PROVIDER_REQUESTS=1
 CHILD_EVENT_TYPES=session.execution.started,session.execution.succeeded,session.inbox.delivered,session.inbox.enqueued,session.instructions.updated,session.step.ended,session.step.started,session.step.streamed,session.text.delta,session.text.ended,session.text.started,session.usage.updated
@@ -21,17 +21,17 @@ MIDTURN_CHILD_STILL_WORKING=yes
 REPLAY_MIDTURN_BEGIN
 REPLAY_FILE=liveness-midturn.jsonl
 REPLAY_EVENTS=4
-REPLAY_STATUSES_AT_END=ses_ebc2cc116ffe7Oz3vMRwKaapOa
-REPLAY_SESSION ses_ebc2cc116ffe7Oz3vMRwKaapOa busy_ever=yes cleared_by=none
+REPLAY_STATUSES_AT_END=ses_ebc0857e8ffe0ghIbzrEv6Mvle
+REPLAY_SESSION ses_ebc0857e8ffe0ghIbzrEv6Mvle busy_ever=yes cleared_by=none
 REPLAY_FULL_BEGIN
 REPLAY_FILE=liveness-dump.jsonl
 REPLAY_EVENTS=12
 REPLAY_STATUSES_AT_END=none
-REPLAY_SESSION ses_ebc2cc116ffe7Oz3vMRwKaapOa busy_ever=yes cleared_by=session.execution.succeeded
+REPLAY_SESSION ses_ebc0857e8ffe0ghIbzrEv6Mvle busy_ever=yes cleared_by=session.execution.succeeded
 ISO_DB=/home/user/.local/share/opencode/opencode.db
 ISO_BEFORE=297
 ISO_AFTER=297
 ISO=ISO_OK
 DUMP=/home/user/omo-v2/.omo/tmp/event-catalog-2030/liveness-dump.jsonl
 MIDTURN_DUMP=/home/user/omo-v2/.omo/tmp/event-catalog-2030/liveness-midturn.jsonl
-SANDBOX=/tmp/oqa-xdg.cHlNwc/proj
+SANDBOX=/tmp/oqa-xdg.4C53w5/proj

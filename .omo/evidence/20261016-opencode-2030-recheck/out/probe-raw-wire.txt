@@ -1,9 +1,9 @@
 HOST_VERSION=opencode v2.0.30
-SESSION=ses_ebc2cb889ffeKyMaMSFhlnwJz6
-CREATE_RAW={"data":{"id":"ses_ebc2cb889ffeKyMaMSFhlnwJz6","projectID":"4297d39f09062e8d0581ec717cd5e7fe3001388c","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"creat
+SESSION=ses_ebc084cd9ffeUzEoLSdwlHsKXZ
+CREATE_RAW={"data":{"id":"ses_ebc084cd9ffeUzEoLSdwlHsKXZ","projectID":"4a0e836895149f8031237ea6f3dcea8fa41d3e99","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"creat
 WIRE_EVENT_TYPES=2
 WIRE_HAS_SESSION_CREATED=yes
 WIRE_SESSION_EVENTS=session.created
-STREAM_BYTES=565
+STREAM_BYTES=564
 STREAM=/home/user/omo-v2/.omo/tmp/event-catalog-2030/raw-sse.txt
 ISO=ISO_OK
