@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> **这是 omo 的 OpenCode 2.x 移植仓。** 上游项目是 [code-yeongyu/oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)；
+> 本仓只维护 2.x 适配层和几个上游 1.x 也存在的 bug 修复。移植分支 `feat/v2-plugin-runtime`，
+> 说明、实测数据与本地验证步骤见 [README-V2.md](./README-V2.md)。
+
 > [!NOTE]
 > **OmO for Codex is here: try LazyCodex**
 >
